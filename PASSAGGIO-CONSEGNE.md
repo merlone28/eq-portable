@@ -43,6 +43,8 @@ Webapp single-file che usa il microfono del dispositivo per analizzare la rispos
 - `startRing()` / `stopRing()` — ciclo di vita del rilevatore di fischio
 - `checkFeedback()` — chiamata ogni frame quando `ringActive`: per ogni banda 100 Hz&ndash;8 kHz calcola la prominenza rispetto alle 4 bande vicine, ne tiene una media mobile veloce (`ringFast`, α 0.45) e una lenta (`ringSlow`, α 0.035); se la veloce supera 6.5 dB e supera la lenta di oltre 3.5 dB per almeno 5 frame consecutivi, segnala la banda come possibile innesco
 - `recordRingHit(b)` / `renderRingHits()` — tengono e mostrano l'elenco delle frequenze già trovate nella sessione corrente (deduplicate per banda, tenuto il valore massimo)
+- `setEqMode(simple)` — passa tra dettaglio parametrico e 3 bande, ricalcola il referto corrente se c'è una misura congelata
+- `setGateMode(g)` — passa tra rumore fisso e parlato reale, bloccato durante un'analisi in corso (`analyzing`)
 
 ## Rilevatore di fischio (feedback) — come funziona e perché
 
@@ -57,6 +59,25 @@ Soglie tarate a mano (da verificare sul campo, sono il punto più probabile da a
 
 Limiti noti: è un'euristica acustica, non una vera misura di margine di guadagno (non conosce il gain reale del mixer); su un fonico esperto è un aiuto, non un sostituto dell'orecchio. Va provato con un vero ring test in sala prima di fidarsene durante un'adunanza vera.
 
+## EQ semplificata a 3 bande — come funziona e perché
+
+Toggle "Dettaglio correzioni" nella sezione controlli: **Parametrico** (comportamento originale, fino a 31 bande fini più i picchi stretti Q&asymp;10) oppure **3 bande**, pensata per i mixer da Sala del Regno che hanno solo bassi/medi/alti a shelf, senza parametrico.
+
+In modalità 3 bande, `report()` non genera più le card fini né i picchi stretti (un taglio Q&asymp;10 non è comunque realizzabile su uno shelf): raggruppa le 10 bande d'ottava (`OCT`) in tre gruppi definiti in `BROAD`, media le deviazioni di ciascun gruppo, e produce una sola card per gruppo se la media supera 2 dB di soglia:
+- **Bassi** = bande 31.5/63/125/250 Hz
+- **Medi** = bande 500/1000/2000 Hz
+- **Alti** = bande 4000/8000/16000 Hz
+
+Il testo delle card (`BROAD[].hi`/`.lo`) è scritto per chi non conosce il gergo audio ("gira la manopola dei bassi verso il taglio"), non per un fonico. Cambiare la soglia di 2 dB o i confini dei tre gruppi si tocca solo in `BROAD`, non nella logica di `report()`.
+
+## Misura "a gate" sul parlato reale — come funziona e perché
+
+Toggle "Modalità di misura": **Rumore fisso** (comportamento originale: accumula ogni frame per tutta la durata, pensato per rumore rosa o programma continuo) oppure **Parlato reale**, pensata per tarare l'EQ durante un discorso vero, con le pause naturali tra una frase e l'altra.
+
+In modalità gate, in `loop()` un frame entra nell'accumulo (`acc`/`accN`) solo se il livello supera `GATE_DB` (−48 dBFS): i momenti di silenzio tra le frasi vengono ignorati invece di sporcare la media. Di conseguenza anche il controllo di validità in `finish()` cambia: invece di scartare la misura quando la frazione di frame "deboli" supera il 40% (pensato per un segnale continuo, dove è sintomo di volume basso), in gate mode si scarta solo se **meno del 25% dei frame totali** ha superato la soglia (`accN/frames<0.25`, messaggio "Troppo poco parlato catturato"): con pause normali di conversazione è facile restare sopra quella soglia, un discorso quasi tutto silenzioso no. Il controllo di saturazione (clipping) resta invariato in entrambe le modalità.
+
+Il cambio di modalità è bloccato mentre un'analisi è in corso (`analyzing`), per non alterare una misura a metà.
+
 ## Soglie e parametri tarati a mano
 
 - Consiglio numerico emesso se |dev| > 1,5 dB (3 dB sotto i 63 Hz e sopra i 16 kHz, dove il mic è inaffidabile)
@@ -64,6 +85,8 @@ Limiti noti: è un'euristica acustica, non una vera misura di margine di guadagn
 - Picco stretto = banda che supera di oltre 7 dB la media delle 4 bande vicine, solo tra 100 Hz e 8 kHz → suggerito parametrico Q≈10
 - Soglie zone: 2,5 dB per i sub, 2 dB per gli alti, 1,5 dB per il resto
 - Intensità del linguaggio: <soglia+1,5 → "un po'"; <6 dB → forma neutra; ≥6 dB → "decisamente"
+- EQ 3 bande: consiglio emesso se |media di gruppo| > 2 dB
+- Modalità "parlato reale": soglia di attivazione `GATE_DB=-48` dBFS; misura scartata se meno del 25% dei frame è sopra soglia
 
 ## Limiti noti (dichiarati anche nell'interfaccia)
 
@@ -83,15 +106,15 @@ Percorso previsto: GitHub Pages → aggiunta alla home del telefono. Nessuna bui
 
 **Fatto (28/07/2026):** installabilità reale — `manifest.json`, `sw.js` (service worker) e icone (`icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`, `favicon-32.png`). Vedi sezione dedicata sotto.
 
-Priorità pensate per lo stesso caso d'uso (parlato dal vivo, mixer semplice, sala di culto):
+**Fatto (28/07/2026):** EQ semplificata a 3 bande e misura "a gate" sul parlato reale — vedi le due sezioni dedicate sopra.
 
-1. **Traduzione dei consigli per mixer a 3 bande:** oggi l'app ragiona per bande fini (fino a 31) presupponendo un parametrico. Molti mixer da Sala del Regno hanno solo bassi/medi/alti shelf. Aggiungere una modalità che riduce i consigli fini a un'unica indicazione per banda larga.
-2. **Misura "a gate" durante il parlato reale:** invece di scartare l'intera misura se ci sono troppi frame sotto soglia (pause tra una frase e l'altra), accumulare solo i frame sopra una soglia di attivazione. Permetterebbe di tarare durante un discorso vero senza rumore rosa.
-3. **Esportazione del referto** (testo o PNG del grafico) da mandare a chi opera il mixer, se non è la stessa persona che tiene il telefono.
-4. **Persistenza delle misure** in `localStorage`, con nome della sala — utile per chi gira più congregazioni.
-5. **Confronto prima/dopo:** salvare una misura come riferimento e mostrare le due curve sovrapposte per verificare l'effetto delle correzioni applicate.
-6. **Curva obiettivo personalizzabile** dall'utente, trascinando i punti sul grafico.
-7. **Correzione della risposta del microfono:** permettere il caricamento di un file di calibrazione, se si vuole usare un mic di misura esterno.
+Priorità rimaste, pensate per lo stesso caso d'uso (parlato dal vivo, mixer semplice, sala di culto):
+
+1. **Esportazione del referto** (testo o PNG del grafico) da mandare a chi opera il mixer, se non è la stessa persona che tiene il telefono.
+2. **Persistenza delle misure** in `localStorage`, con nome della sala — utile per chi gira più congregazioni.
+3. **Confronto prima/dopo:** salvare una misura come riferimento e mostrare le due curve sovrapposte per verificare l'effetto delle correzioni applicate.
+4. **Curva obiettivo personalizzabile** dall'utente, trascinando i punti sul grafico.
+5. **Correzione della risposta del microfono:** permettere il caricamento di un file di calibrazione, se si vuole usare un mic di misura esterno.
 
 ## Installabilità (PWA) — come funziona
 
