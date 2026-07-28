@@ -14,7 +14,9 @@
 <meta name="apple-mobile-web-app-title" content="RTA EQ">
 <style>
 :root{
-  --panel:#1b1e21;--etch:#3a4045;--silk:#9aa3a8;--silk-dim:#666e73;
+  /* --silk-dim era #666e73: contrasto ~3.2:1 sul pannello, troppo basso per
+     testi da 10-11 px. Ora ~5.5:1, leggibile anche con poca luce in sala. */
+  --panel:#1b1e21;--etch:#3a4045;--silk:#aeb7bc;--silk-dim:#8b959b;
   --phos:#ffb02e;--cool:#3fd0d6;--target:#e7e9ea;--ok:#7fd47f;--alert:#ff5f56;--bg:#101214;
 }
 *{box-sizing:border-box}
@@ -27,11 +29,14 @@ body{background:var(--bg);color:var(--silk);
 .rack{background:linear-gradient(180deg,#25292c 0%,#1b1e21 12%,#191c1e 88%,#22262a 100%);
   border:1px solid #0a0c0d;border-radius:6px;
   box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 12px 30px rgba(0,0,0,.5);
-  padding:14px;margin-bottom:12px;position:relative;}
+  /* padding-top maggiorato: le viti decorative stanno a y=10..19, il contenuto
+     ora parte sotto e non ci finisce più sopra (prima coprivano le etichette). */
+  padding:22px 14px 14px;margin-bottom:12px;position:relative;}
 .rack::before,.rack::after{content:"";position:absolute;top:10px;width:9px;height:9px;border-radius:50%;
-  background:radial-gradient(circle at 35% 30%,#6d7479,#31363a 60%,#15181a);box-shadow:0 1px 1px rgba(0,0,0,.6);}
+  background:radial-gradient(circle at 35% 30%,#6d7479,#31363a 60%,#15181a);box-shadow:0 1px 1px rgba(0,0,0,.6);
+  pointer-events:none;}
 .rack::before{left:9px}.rack::after{right:9px}
-.silk{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--silk-dim);font-weight:700}
+.silk{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--silk-dim);font-weight:700}
 h1{margin:0;font-size:15px;letter-spacing:.28em;text-transform:uppercase;color:#d7dbdd;font-weight:600}
 h2{margin:0 0 2px;font-size:13px;letter-spacing:.06em;color:#e7e9ea;font-weight:600}
 header.rack{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 26px}
@@ -82,10 +87,11 @@ canvas{width:100%;height:250px;display:block;touch-action:none}
 .lvlVerdict b.vWarn{color:var(--phos)}
 .lvlVerdict b.vBad{color:var(--alert)}
 .meters{display:flex;gap:14px;align-items:center;margin-top:10px;flex-wrap:wrap}
-.meter{flex:1 1 150px}
+.meter{flex:1 1 150px;min-width:0}
 .bar{height:8px;background:#0c0e0f;border:1px solid #000;box-shadow:0 0 0 1px #3a4045;border-radius:2px;overflow:hidden}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cool),var(--ok) 55%,var(--phos) 82%,var(--alert));transition:width .08s linear}
-.val{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:#d7dbdd}
+.val{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:#e2e6e8;
+  white-space:nowrap;flex:0 0 auto}
 .headline{font-size:16px;line-height:1.5;color:#e7e9ea;font-weight:600;letter-spacing:.01em}
 .headline em{font-style:normal;color:var(--phos)}
 .sub{font-size:13px;line-height:1.6;color:#aab2b7;margin-top:8px}
@@ -104,7 +110,7 @@ li .move small{display:block;font-size:10px;letter-spacing:.1em;font-weight:600;
 .cut{color:var(--phos)}.boost{color:var(--cool)}.narrow{color:var(--alert)}
 li .why{flex:1;font-size:13px;line-height:1.5;color:#b9c1c5}
 li .why b{color:#e7e9ea;font-weight:600;display:block;margin-bottom:2px}
-.note{font-size:11.5px;line-height:1.6;color:var(--silk-dim);margin-top:12px}
+.note{font-size:12px;line-height:1.65;color:var(--silk-dim);margin-top:12px}
 .note b{color:var(--silk)}
 hr.etch{border:0;border-top:1px solid var(--etch);border-bottom:1px solid #0a0c0d;margin:12px 0}
 .legend{display:flex;gap:14px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--silk-dim);margin-top:8px;flex-wrap:wrap}
@@ -221,7 +227,7 @@ body.easy li .move{font-size:22px;min-width:80px}
     <span id="posInfo"></span>
   </div>
   <div class="meters">
-    <div class="meter"><div class="silk">Livello ingresso</div><div class="bar"><i id="lvlBar"></i></div></div>
+    <div class="meter"><div class="silk">Volume che arriva al telefono</div><div class="bar"><i id="lvlBar"></i></div></div>
     <div class="val" id="lvlTxt">&mdash;&mdash; dBFS</div>
   </div>
 </section>
@@ -673,10 +679,10 @@ function draw(sp){
   const w=cv.clientWidth,h=cv.clientHeight;
   if(cv.width!==w*dpr||cv.height!==h*dpr){cv.width=w*dpr;cv.height=h*dpr;}
   g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
-  const padL=26,padR=6,padT=8,padB=20,W=w-padL-padR,H=h-padT-padB;
+  const padL=30,padR=6,padT=8,padB=22,W=w-padL-padR,H=h-padT-padB;
   const y=db=>padT+H*(DBMAX-db)/(DBMAX-DBMIN),bw=W/CENTERS.length;
-  g.strokeStyle="#1e2325";g.lineWidth=1;
-  g.fillStyle="#4c545a";g.font="9px ui-monospace,Menlo,monospace";g.textAlign="right";
+  g.strokeStyle="#272d31";g.lineWidth=1;
+  g.fillStyle="#8b949a";g.font="10px ui-monospace,Menlo,monospace";g.textAlign="right";
   for(let db=DBMIN;db<=DBMAX;db+=6){
     const yy=Math.round(y(db))+.5;
     g.beginPath();g.moveTo(padL,yy);g.lineTo(w-padR,yy);g.stroke();
@@ -687,8 +693,8 @@ function draw(sp){
   CENTERS.forEach((c,i)=>{
     if([31.5,125,500,2000,8000].includes(c)){
       const x=padL+bw*(i+.5);
-      g.strokeStyle="#1a1e20";g.beginPath();g.moveTo(x,padT);g.lineTo(x,padT+H);g.stroke();
-      g.fillStyle="#5b6368";g.fillText(c>=1000?(c/1000)+"k":String(c),x,h-6);
+      g.strokeStyle="#232a2d";g.beginPath();g.moveTo(x,padT);g.lineTo(x,padT+H);g.stroke();
+      g.fillStyle="#98a2a8";g.fillText(c>=1000?(c/1000)+"k":String(c),x,h-6);
     }
   });
   if(sp)CENTERS.forEach((c,i)=>{
@@ -872,6 +878,7 @@ function setAppMode(m){
     setDur(20);
     if(noisePlaying)stopNoise();
   }
+  if(!running)$("lvlTxt").textContent=(m==="easy")?"—":"—— dBFS";
   if(!frozen){
     $("headline").innerHTML="Attiva il microfono, poi premi <em>"+runLabel()+"</em>.";
     $("subline").textContent=m==="easy"
