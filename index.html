@@ -105,6 +105,20 @@ details[open] summary{color:var(--silk)}
 .ringAlert.hot{color:#ffd9d6;background:#3a1512;border-color:#5a1f1a;font-weight:600}
 ul.chips{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;padding:0}
 ul.chips li{background:#22262a;border:1px solid #0d0f10;border-radius:12px;padding:5px 10px;font-size:11.5px;color:#e7e9ea;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+/* --- due modalità: Sala del Regno (easy) e Avanzata (pro) --- */
+body.easy .proOnly{display:none!important}
+body.pro .easyOnly{display:none!important}
+.modeBar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.modeBar .seg{flex:1 1 220px}
+ol.steps{list-style:none;counter-reset:s;margin:10px 0 0;padding:0}
+ol.steps li{counter-increment:s;position:relative;padding:9px 0 9px 34px;font-size:13.5px;line-height:1.55;color:#c3cace}
+ol.steps li::before{content:counter(s);position:absolute;left:0;top:8px;width:22px;height:22px;border-radius:50%;
+  background:linear-gradient(180deg,#5a4a1e,#3a2f12);color:var(--phos);font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,Consolas,monospace}
+ol.steps li b{color:#e7e9ea;font-weight:600}
+body.easy .headline{font-size:17px}
+body.easy ul.plain li{padding:12px 0 12px 16px}
+body.easy li .move{font-size:22px;min-width:80px}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -119,26 +133,52 @@ ul.chips li{background:#22262a;border:1px solid #0d0f10;border-radius:12px;paddi
   <div class="lamp"><span class="led" id="led"></span><span id="ledTxt">In attesa</span></div>
 </header>
 
+<section class="rack">
+  <div class="silk">Modalità</div>
+  <hr class="etch">
+  <div class="modeBar">
+    <div class="seg" id="appModeSeg" role="group" aria-label="Modalità dell'app">
+      <button id="modeEasy" aria-pressed="true">Sala del Regno</button>
+      <button id="modePro" aria-pressed="false">Avanzata</button>
+    </div>
+  </div>
+  <div class="note easyOnly">Modalità semplice: tutto è già impostato per le voci degli oratori in sala. Devi solo attivare il microfono e premere un pulsante.</div>
+  <div class="note proOnly">Modalità avanzata: tutti i controlli sono sbloccati (durata, curva obiettivo, modalità di misura, dettaglio delle correzioni).</div>
+</section>
+
+<section class="rack easyOnly">
+  <div class="silk">Cosa fare, passo per passo</div>
+  <hr class="etch">
+  <ol class="steps">
+    <li>Premi <b>Attiva microfono</b> e consenti l'accesso quando il telefono lo chiede.</li>
+    <li>Mettiti <b>in mezzo alla sala</b>, tieni il telefono all'altezza della testa di una persona seduta e non coprire il microfono con la mano.</li>
+    <li>Mentre <b>l'oratore parla normalmente</b> dall'impianto, premi <b>Analizza la sala</b> e resta fermo per il conto alla rovescia.</li>
+    <li>Leggi i consigli qui sotto e applicali sul mixer. <b>Parti sempre dai tagli</b>, poi eventuali aumenti, muovendo poco per volta.</li>
+    <li>Se puoi, ripeti in 2&ndash;3 punti diversi della sala premendo <b>Misura in un altro punto</b>: il risultato diventa molto più affidabile.</li>
+  </ol>
+</section>
+
 <section class="rack ctrls">
   <div class="row">
     <button id="btnMic" class="primary">Attiva microfono</button>
-    <button id="btnNoise" disabled>Rumore rosa</button>
+    <button id="btnNoise" class="proOnly" disabled>Rumore rosa</button>
   </div>
-  <div class="row"><button id="btnRun" class="big primary" disabled>Ascolta e analizza</button></div>
-  <div class="seg" id="durSeg" role="group" aria-label="Durata dell'ascolto">
+  <div class="row"><button id="btnRun" class="big primary" disabled>Analizza la sala</button></div>
+  <div class="note easyOnly">Già impostato per te: obiettivo <b>parlato</b>, ascolto di <b>20 secondi</b> che salta le pause del discorso, consigli per <b>mixer con bassi / medi / alti</b>.</div>
+  <div class="seg proOnly" id="durSeg" role="group" aria-label="Durata dell'ascolto">
     <button data-dur="10" aria-pressed="true">10 secondi</button>
     <button data-dur="20" aria-pressed="false">20 secondi</button>
     <button data-dur="30" aria-pressed="false">30 secondi</button>
   </div>
-  <label class="field">
+  <label class="field proOnly">
     <span class="silk">Modalità di misura</span>
     <div class="seg" id="gateSeg" role="group" aria-label="Modalità di misura">
       <button id="modeFixed" aria-pressed="true">Rumore fisso</button>
       <button id="modeGate" aria-pressed="false">Parlato reale</button>
     </div>
   </label>
-  <div class="note">Rumore fisso: usa rumore rosa o un programma continuo per tutta la durata. Parlato reale: ignora le pause tra una frase e l'altra e usa solo i momenti in cui l'oratore parla davvero &mdash; utile per tarare durante un discorso vero, senza rumore rosa.</div>
-  <label class="field">
+  <div class="note proOnly">Rumore fisso: usa rumore rosa o un programma continuo per tutta la durata. Parlato reale: ignora le pause tra una frase e l'altra e usa solo i momenti in cui l'oratore parla davvero &mdash; utile per tarare durante un discorso vero, senza rumore rosa.</div>
+  <label class="field proOnly">
     <span class="silk">Curva obiettivo</span>
     <select id="target">
       <option value="flat">Piatta &mdash; studio / ascolto critico</option>
@@ -147,7 +187,7 @@ ul.chips li{background:#22262a;border:1px solid #0d0f10;border-radius:12px;paddi
       <option value="hifi">Musica &mdash; hi-fi domestico</option>
     </select>
   </label>
-  <label class="field">
+  <label class="field proOnly">
     <span class="silk">Dettaglio correzioni</span>
     <div class="seg" id="eqSeg" role="group" aria-label="Dettaglio correzioni EQ">
       <button id="eqParam" aria-pressed="true">Parametrico</button>
@@ -155,7 +195,7 @@ ul.chips li{background:#22262a;border:1px solid #0d0f10;border-radius:12px;paddi
     </div>
   </label>
   <div class="row">
-    <button id="btnPos" disabled>Aggiungi alla media</button>
+    <button id="btnPos" disabled>Misura in un altro punto</button>
     <button id="btnReset" disabled>Azzera misure</button>
   </div>
 </section>
@@ -184,26 +224,27 @@ ul.chips li{background:#22262a;border:1px solid #0d0f10;border-radius:12px;paddi
   </div>
   <div class="ringAlert" id="ringAlert">Attiva il microfono e premi Cerca fischio prima di alzare il volume.</div>
   <ul class="chips" id="ringList"></ul>
-  <div class="note">Alza lentamente il guadagno del canale (o il volume generale) mentre l'oratore parla normale. Quando l'impianto sta per innescare, qui sopra compare la frequenza: tagliala con un parametrico stretto (Q 8&ndash;10 circa) prima di continuare ad alzare.</div>
+  <div class="note easyOnly">Serve per capire fino a che volume puoi arrivare senza che l'impianto fischi. Premi <b>Cerca fischio</b> e alza <b>molto lentamente</b> il volume del microfono dell'oratore: appena l'app avvisa, sei al limite. Torna leggermente indietro col volume e fermati lì. Se sai usare l'equalizzatore, puoi invece tagliare le frequenze che compaiono nell'elenco.</div>
+  <div class="note proOnly">Alza lentamente il guadagno del canale (o il volume generale) mentre l'oratore parla normale. Quando l'impianto sta per innescare, qui sopra compare la frequenza: tagliala con un parametrico stretto (Q 8&ndash;10 circa) prima di continuare ad alzare.</div>
 </section>
 
 <section class="rack" id="report">
   <div class="silk">Referto</div>
   <hr class="etch">
-  <div class="headline" id="headline">Attiva il microfono, poi premi <em>Ascolta e analizza</em>.</div>
-  <div class="sub" id="subline">L'app ascolta per la durata scelta, media tutto il periodo e ti dà un giudizio unico che resta fermo sullo schermo.</div>
+  <div class="headline" id="headline">Attiva il microfono, poi premi <em>Analizza la sala</em>.</div>
+  <div class="sub" id="subline">L'app ascolta, valuta com'è il suono in sala e ti dice cosa correggere sul mixer, in parole semplici.</div>
   <ul class="plain" id="plain"></ul>
   <div id="detailWrap" style="display:none">
     <hr class="etch">
-    <details>
-      <summary>Regolazioni numeriche sull'equalizzatore</summary>
+    <details id="cardsDetails">
+      <summary id="cardsSummary">Regolazioni numeriche sull'equalizzatore</summary>
       <ul class="cards" id="cards"></ul>
     </details>
   </div>
   <div class="note" id="note"></div>
 </section>
 
-<section class="rack">
+<section class="rack proOnly">
   <div class="silk">Come misurare bene</div>
   <hr class="etch">
   <div class="note">
@@ -295,7 +336,7 @@ let analyzing=false,acc=null,accN=0,tEnd=0,lowFrames=0,clipFrames=0,frames=0,dur
 let results=[],frozen=null;
 let noiseNode=null,noisePlaying=false;
 let ringActive=false,ringFast=null,ringSlow=null,ringStreak=null,ringCurrent=null,ringHits=[];
-let eqSimple=false,gateMode=false;
+let eqSimple=false,gateMode=false,appMode="easy";
 
 const $=id=>document.getElementById(id);
 const cv=$("cv"),g=cv.getContext("2d");
@@ -542,9 +583,13 @@ function report(sp){
     '<li><div class="move '+it.cls+'">'+it.amt+"<small>"+it.unit+"</small></div>"+
     '<div class="why"><b>'+it.title+"</b>"+it.why+"</div></li>").join("");
   $("detailWrap").style.display=items.length?"block":"none";
+  $("cardsSummary").textContent=eqSimple?"Cosa toccare sul mixer":"Regolazioni numeriche sull'equalizzatore";
+  if(appMode==="easy")$("cardsDetails").open=true;
 
-  $("note").innerHTML="<b>Da tenere presente.</b> Il microfono del telefono non è calibrato: sotto 50 Hz e sopra 12 kHz le letture sono indicative. I buchi profondi e stretti nei bassi sono cancellazioni della sala e <b>non si correggono con l'EQ</b>: si risolvono spostando diffusori o ascoltatore."+
-    (results.length?" Referto calcolato sulla media di "+(results.length+1)+" posizioni.":" Ripeti l'analisi in altri punti e premi \u201cAggiungi alla media\u201d per un risultato affidabile.");
+  $("note").innerHTML=(appMode==="easy"
+    ?"<b>Da tenere presente.</b> Il microfono del telefono non è preciso come uno da misura: prendi questi consigli come una guida e fidati anche dell'orecchio. Se un difetto non si corregge con l'equalizzatore, spesso dipende dalla sala (eco, posizione delle casse) e non dal mixer."
+    :"<b>Da tenere presente.</b> Il microfono del telefono non è calibrato: sotto 50 Hz e sopra 12 kHz le letture sono indicative. I buchi profondi e stretti nei bassi sono cancellazioni della sala e <b>non si correggono con l'EQ</b>: si risolvono spostando diffusori o ascoltatore.")+
+    (results.length?" Referto calcolato sulla media di "+(results.length+1)+" posizioni.":" Ripeti l'analisi in altri punti e premi \u201c"+posLabel()+"\u201d per un risultato affidabile.");
 }
 
 /* --- grafico --- */
@@ -684,7 +729,7 @@ $("btnRun").onclick=()=>{if(running&&!analyzing)begin();};
 $("btnPos").onclick=()=>{
   if(!frozen)return;
   results.push(frozen);
-  $("posInfo").textContent="· "+results.length+" misure in media";
+  $("posInfo").textContent="· "+results.length+(results.length===1?" punto misurato":" punti in media");
   $("btnPos").disabled=true;
   setLamp("done",results.length+" misure salvate");
   report(mean(results));
@@ -693,8 +738,8 @@ $("btnReset").onclick=()=>{
   results=[];frozen=null;
   $("posInfo").textContent="";$("plain").innerHTML="";$("cards").innerHTML="";
   $("detailWrap").style.display="none";$("note").textContent="";
-  $("btnPos").disabled=true;$("btnRun").textContent="Ascolta e analizza";
-  $("headline").innerHTML="Misure azzerate. Premi <em>Ascolta e analizza</em> per ricominciare.";
+  $("btnPos").disabled=true;$("btnRun").textContent=runLabel();
+  $("headline").innerHTML="Misure azzerate. Premi <em>"+runLabel()+"</em> per ricominciare.";
   $("subline").textContent="";
   if(running)setLamp("on","Pronto");
 };
@@ -727,6 +772,48 @@ function setGateMode(g){
 }
 $("modeFixed").onclick=()=>setGateMode(false);
 $("modeGate").onclick=()=>setGateMode(true);
+
+/* --- due modalità: Sala del Regno (guidata) / Avanzata (tutti i controlli) --- */
+function runLabel(){return appMode==="easy"?"Analizza la sala":"Ascolta e analizza";}
+function posLabel(){return appMode==="easy"?"Misura in un altro punto":"Aggiungi alla media";}
+function setDur(d){
+  durSec=d;
+  document.querySelectorAll("#durSeg button").forEach(b=>
+    b.setAttribute("aria-pressed",(+b.dataset.dur===d)?"true":"false"));
+  $("count").querySelector("b").textContent=durSec;
+}
+function setAppMode(m){
+  if(analyzing)return;
+  appMode=m;
+  document.body.classList.toggle("easy",m==="easy");
+  document.body.classList.toggle("pro",m==="pro");
+  $("modeEasy").setAttribute("aria-pressed",m==="easy"?"true":"false");
+  $("modePro").setAttribute("aria-pressed",m==="pro"?"true":"false");
+  if(m==="easy"){
+    /* preset bloccati, pensati per il parlato dal vivo in sala */
+    $("target").value="speech";
+    setGateMode(true);
+    setEqMode(true);
+    setDur(20);
+    if(noisePlaying)stopNoise();
+  }
+  if(!frozen){
+    $("headline").innerHTML="Attiva il microfono, poi premi <em>"+runLabel()+"</em>.";
+    $("subline").textContent=m==="easy"
+      ?"L'app ascolta, valuta com'è il suono in sala e ti dice cosa correggere sul mixer, in parole semplici."
+      :"L'app ascolta per la durata scelta, media tutto il periodo e ti dà un giudizio unico che resta fermo sullo schermo.";
+  }
+  $("btnRun").textContent=frozen?"Rifai l'analisi":runLabel();
+  $("btnPos").textContent=posLabel();
+  try{localStorage.setItem("rtaAppMode",m);}catch(e){}
+  if(frozen)report(results.length?mean(results.concat(results.includes(frozen)?[]:[frozen])):frozen);
+  draw(frozen||(smooth?normalize(smooth):null));
+}
+$("modeEasy").onclick=()=>setAppMode("easy");
+$("modePro").onclick=()=>setAppMode("pro");
+let savedMode="easy";
+try{savedMode=localStorage.getItem("rtaAppMode")||"easy";}catch(e){}
+setAppMode(savedMode==="pro"?"pro":"easy");
 window.addEventListener("resize",()=>draw(frozen||(smooth?normalize(smooth):null)));
 draw(null);
 
