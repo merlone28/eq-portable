@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#16181a">
+<title>RTA / Assistente di equalizzazione</title>
+<style>
+:root{
+  --panel:#1b1e21;--etch:#3a4045;--silk:#9aa3a8;--silk-dim:#666e73;
+  --phos:#ffb02e;--cool:#3fd0d6;--target:#e7e9ea;--ok:#7fd47f;--alert:#ff5f56;--bg:#101214;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--silk);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-text-size-adjust:100%;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
+.wrap{max-width:900px;margin:0 auto;padding:14px 12px 40px}
+.rack{background:linear-gradient(180deg,#25292c 0%,#1b1e21 12%,#191c1e 88%,#22262a 100%);
+  border:1px solid #0a0c0d;border-radius:6px;
+  box-shadow:0 1px 0 rgba(255,255,255,.06) inset,0 12px 30px rgba(0,0,0,.5);
+  padding:14px;margin-bottom:12px;position:relative;}
+.rack::before,.rack::after{content:"";position:absolute;top:10px;width:9px;height:9px;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#6d7479,#31363a 60%,#15181a);box-shadow:0 1px 1px rgba(0,0,0,.6);}
+.rack::before{left:9px}.rack::after{right:9px}
+.silk{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--silk-dim);font-weight:700}
+h1{margin:0;font-size:15px;letter-spacing:.28em;text-transform:uppercase;color:#d7dbdd;font-weight:600}
+h2{margin:0 0 2px;font-size:13px;letter-spacing:.06em;color:#e7e9ea;font-weight:600}
+header.rack{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 26px}
+.brand small{display:block;margin-top:5px}
+.lamp{display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.18em;text-transform:uppercase;text-align:right}
+.led{width:9px;height:9px;border-radius:50%;background:#3a2a12;box-shadow:0 0 0 1px #0a0c0d inset;flex:none}
+.led.on{background:var(--phos);box-shadow:0 0 10px var(--phos),0 0 0 1px #0a0c0d inset}
+.led.rec{background:var(--alert);box-shadow:0 0 10px var(--alert),0 0 0 1px #0a0c0d inset;animation:pulse 1s infinite}
+.led.done{background:var(--ok);box-shadow:0 0 10px var(--ok),0 0 0 1px #0a0c0d inset}
+@keyframes pulse{50%{opacity:.25}}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+button{font:inherit;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:600;
+  color:#d7dbdd;background:linear-gradient(180deg,#33383c,#23272a);
+  border:1px solid #0d0f10;border-radius:4px;padding:11px 14px;cursor:pointer;
+  box-shadow:0 1px 0 rgba(255,255,255,.08) inset,0 2px 4px rgba(0,0,0,.4);flex:1 1 auto;min-height:44px;}
+button:active{box-shadow:0 2px 6px rgba(0,0,0,.6) inset;transform:translateY(1px)}
+button:focus-visible{outline:2px solid var(--phos);outline-offset:2px}
+button.primary{background:linear-gradient(180deg,#5a4a1e,#3a2f12);color:var(--phos)}
+button.live{background:linear-gradient(180deg,#7a2b26,#4a1a17);color:#ffd9d6}
+button.big{flex:1 1 100%;font-size:14px;padding:16px;letter-spacing:.18em}
+button[disabled]{opacity:.38;cursor:not-allowed}
+.seg{display:flex;border:1px solid #0d0f10;border-radius:4px;overflow:hidden;flex:1 1 100%}
+.seg button{flex:1;border:0;border-right:1px solid #0d0f10;border-radius:0;box-shadow:none;background:#22262a;font-size:11px;padding:10px 4px}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:linear-gradient(180deg,#4a3d18,#2e2610);color:var(--phos)}
+label.field{display:block;flex:1 1 100%}
+select{width:100%;font:inherit;font-size:13px;color:#d7dbdd;background:#22262a;
+  border:1px solid #0d0f10;border-radius:4px;padding:11px 10px;margin-top:5px;min-height:44px}
+.ctrls > * + *{margin-top:10px}
+.screen{background:#0c0e0f;border:1px solid #000;border-radius:3px;
+  box-shadow:0 0 0 1px #3a4045,0 6px 18px rgba(0,0,0,.6) inset;padding:8px 6px 4px;position:relative}
+canvas{width:100%;height:250px;display:block;touch-action:none}
+@media(max-width:520px){canvas{height:200px}}
+.count{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;
+  background:rgba(12,14,15,.72);border-radius:3px}
+.count.show{display:flex}
+.count b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:58px;color:var(--phos);line-height:1;font-weight:400}
+.count span{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--silk);margin-top:10px}
+.meters{display:flex;gap:14px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.meter{flex:1 1 150px}
+.bar{height:8px;background:#0c0e0f;border:1px solid #000;box-shadow:0 0 0 1px #3a4045;border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cool),var(--ok) 55%,var(--phos) 82%,var(--alert));transition:width .08s linear}
+.val{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;color:#d7dbdd}
+.headline{font-size:16px;line-height:1.5;color:#e7e9ea;font-weight:600;letter-spacing:.01em}
+.headline em{font-style:normal;color:var(--phos)}
+.sub{font-size:13px;line-height:1.6;color:#aab2b7;margin-top:8px}
+ul.plain{list-style:none;margin:14px 0 0;padding:0}
+ul.plain li{padding:10px 0 10px 16px;border-left:2px solid var(--etch);margin-bottom:2px}
+ul.plain li.up{border-left-color:var(--phos)}
+ul.plain li.down{border-left-color:var(--cool)}
+ul.plain li b{display:block;color:#e7e9ea;font-size:13.5px;margin-bottom:3px;font-weight:600}
+ul.plain li span{font-size:13px;line-height:1.55;color:#aab2b7}
+ul.cards{list-style:none;margin:12px 0 0;padding:0}
+ul.cards li{background:#15181a;border:1px solid #0a0c0d;border-radius:4px;
+  padding:11px 12px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start}
+li .move{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:19px;font-weight:700;min-width:70px;text-align:right;line-height:1.1}
+li .move small{display:block;font-size:10px;letter-spacing:.1em;font-weight:600;color:var(--silk-dim);margin-top:3px}
+.cut{color:var(--phos)}.boost{color:var(--cool)}.narrow{color:var(--alert)}
+li .why{flex:1;font-size:13px;line-height:1.5;color:#b9c1c5}
+li .why b{color:#e7e9ea;font-weight:600;display:block;margin-bottom:2px}
+.note{font-size:11.5px;line-height:1.6;color:var(--silk-dim);margin-top:12px}
+.note b{color:var(--silk)}
+hr.etch{border:0;border-top:1px solid var(--etch);border-bottom:1px solid #0a0c0d;margin:12px 0}
+.legend{display:flex;gap:14px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--silk-dim);margin-top:8px;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle}
+.legend .a::before{background:var(--phos)}.legend .b::before{background:var(--cool)}.legend .c::before{background:var(--target)}
+details summary{cursor:pointer;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--silk-dim);font-weight:700;padding:4px 0}
+details[open] summary{color:var(--silk)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="rack">
+  <div class="brand">
+    <h1>Analizzatore RTA</h1>
+    <small class="silk">Assistente di equalizzazione &middot; 1/3 di ottava</small>
+  </div>
+  <div class="lamp"><span class="led" id="led"></span><span id="ledTxt">In attesa</span></div>
+</header>
+
+<section class="rack ctrls">
+  <div class="row">
+    <button id="btnMic" class="primary">Attiva microfono</button>
+    <button id="btnNoise" disabled>Rumore rosa</button>
+  </div>
+  <div class="row"><button id="btnRun" class="big primary" disabled>Ascolta e analizza</button></div>
+  <div class="seg" role="group" aria-label="Durata dell'ascolto">
+    <button data-dur="10" aria-pressed="true">10 secondi</button>
+    <button data-dur="20" aria-pressed="false">20 secondi</button>
+    <button data-dur="30" aria-pressed="false">30 secondi</button>
+  </div>
+  <label class="field">
+    <span class="silk">Curva obiettivo</span>
+    <select id="target">
+      <option value="flat">Piatta &mdash; studio / ascolto critico</option>
+      <option value="pa" selected>Live PA &mdash; sala amplificata</option>
+      <option value="speech">Parlato &mdash; conferenza, sala riunioni</option>
+      <option value="hifi">Musica &mdash; hi-fi domestico</option>
+    </select>
+  </label>
+  <div class="row">
+    <button id="btnPos" disabled>Aggiungi alla media</button>
+    <button id="btnReset" disabled>Azzera misure</button>
+  </div>
+</section>
+
+<section class="rack">
+  <div class="screen">
+    <canvas id="cv"></canvas>
+    <div class="count" id="count"><b>10</b><span id="countTxt">Ascolto in corso</span></div>
+  </div>
+  <div class="legend">
+    <span class="c">Obiettivo</span><span class="a">In eccesso</span><span class="b">In difetto</span>
+    <span id="posInfo"></span>
+  </div>
+  <div class="meters">
+    <div class="meter"><div class="silk">Livello ingresso</div><div class="bar"><i id="lvlBar"></i></div></div>
+    <div class="val" id="lvlTxt">&mdash;&mdash; dBFS</div>
+  </div>
+</section>
+
+<section class="rack" id="report">
+  <div class="silk">Referto</div>
+  <hr class="etch">
+  <div class="headline" id="headline">Attiva il microfono, poi premi <em>Ascolta e analizza</em>.</div>
+  <div class="sub" id="subline">L'app ascolta per la durata scelta, media tutto il periodo e ti dà un giudizio unico che resta fermo sullo schermo.</div>
+  <ul class="plain" id="plain"></ul>
+  <div id="detailWrap" style="display:none">
+    <hr class="etch">
+    <details>
+      <summary>Regolazioni numeriche sull'equalizzatore</summary>
+      <ul class="cards" id="cards"></ul>
+    </details>
+  </div>
+  <div class="note" id="note"></div>
+</section>
+
+<section class="rack">
+  <div class="silk">Come misurare bene</div>
+  <hr class="etch">
+  <div class="note">
+    <b>1.</b> Punta il telefono verso l'impianto, a 1&ndash;2 m di altezza, ad almeno 1 m da muri e angoli.<br>
+    <b>2.</b> Manda in sala il programma reale (voce, musica) oppure il rumore rosa a volume d'esercizio. Se usi il rumore dal telefono, collegalo all'impianto via cavo o Bluetooth, non usare l'altoparlante interno.<br>
+    <b>3.</b> Ripeti l'analisi in 3&ndash;5 punti della sala e premi <b>Aggiungi alla media</b> ogni volta: la media spaziale toglie i buchi che esistono solo in un punto.<br>
+    <b>4.</b> Applica prima i tagli, poi le esaltazioni. Muovi l'EQ per gradi e riascolta.
+  </div>
+</section>
+
+</div>
+<script>
+"use strict";
+const CENTERS=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
+const R6=Math.pow(2,1/6);
+const TARGETS={
+  flat:{31.5:0,63:0,125:0,250:0,500:0,1000:0,2000:0,4000:0,8000:0,16000:0},
+  pa:{31.5:4,63:3,125:1.5,250:0,500:0,1000:0,2000:-.5,4000:-1.5,8000:-3,16000:-5},
+  speech:{31.5:-8,63:-5,125:-2,250:-1,500:0,1000:1,2000:2,4000:1.5,8000:-1,16000:-4},
+  hifi:{31.5:3,63:2,125:1,250:0,500:0,1000:0,2000:0,4000:-.5,8000:-1.5,16000:-3}
+};
+const OCT=[31.5,63,125,250,500,1000,2000,4000,8000,16000];
+
+/* --- linguaggio comune: 5 zone d'ascolto --- */
+const ZONES=[
+ {i:[0,1],min:2.5,
+  hi:["bassi profondi un po' abbondanti","troppi bassi profondi","bassi profondi decisamente eccessivi"],
+  lo:["bassi profondi un po' scarsi","pochi bassi profondi","bassi profondi quasi assenti"],
+  hiT:"Bassi profondi in eccesso",loT:"Bassi profondi carenti",
+  hiW:"Rimbombo di fondo che sporca tutto il resto e fa sembrare il volume più alto di quello che è. Spesso è il sub troppo vicino a un angolo, o in fase sbagliata.",
+  loW:"Cassa e basso non arrivano allo stomaco: manca l'impatto fisico, soprattutto a volume alto."},
+ {i:[2,3],min:1.5,
+  hi:["bassi gonfi","troppo corpo sui bassi","bassi decisamente impastati"],
+  lo:["poco calore","suono magro","suono decisamente scarnito"],
+  hiT:"Bassi gonfi e impastati",loT:"Manca calore",
+  hiW:"È la causa numero uno di suono confuso: gli strumenti si sovrappongono e le voci faticano a emergere. Tagliare qui dà quasi sempre il miglioramento più evidente.",
+  loW:"Voci e chitarre suonano sottili, senza fondamenta. L'impianto sembra piccolo anche se va forte."},
+ {i:[4,5],min:1.5,
+  hi:["medi troppo in avanti","medi invadenti","medi decisamente nasali"],
+  lo:["medi poco incisivi","medi arretrati","medi praticamente scomparsi"],
+  hiT:"Medi troppo in avanti",loT:"Medi poco incisivi",
+  hiW:"Suono nasale, da telefono. Stanca l'orecchio in fretta anche a volume moderato.",
+  loW:"La voce si sente ma resta indietro rispetto al resto: perde autorità e presenza nella sala."},
+ {i:[6,7],min:1.5,
+  hi:["presenza aggressiva","medio-alti troppo duri","medio-alti decisamente aggressivi"],
+  lo:["poca presenza","suono poco chiaro","suono decisamente ovattato"],
+  hiT:"Medio-alti aggressivi",loT:"Poca presenza",
+  hiW:"Consonanti dure e ascolto faticoso: è la zona che stanca per prima. È anche quella dove i microfoni innescano più facilmente.",
+  loW:"Le parole si capiscono poco e gli attacchi degli strumenti sono smussati: il suono resta indietro, sfocato."},
+ {i:[8,9],min:2,
+  hi:["troppi alti","alti taglienti","alti decisamente eccessivi"],
+  lo:["alti spenti","suono chiuso","alti praticamente assenti"],
+  hiT:"Alti in eccesso",loT:"Alti spenti",
+  hiW:"Suono tagliente e sibilanti marcate sulle S e sulle T. Attenzione: parte di questa energia può essere rumore d'ambiente, non programma.",
+  loW:"Manca dettaglio e brillantezza, il suono è opaco. In sale molto assorbenti o con pubblico è in parte normale."}
+];
+const WHY={
+ 31.5:{n:"Sub",hi:"Rimbombo di fondo che sporca il resto.",lo:"Manca impatto fisico su cassa e basso."},
+ 63:{n:"Bassi",hi:"Boom: il basso copre voci e strumenti.",lo:"Manca corpo, suono magro a volume alto."},
+ 125:{n:"Bassi alti",hi:"Suono gonfio: risonanza di stanza o effetto di prossimità sui microfoni.",lo:"Voci senza calore, suono esile."},
+ 250:{n:"Medio-bassi",hi:"Impasto: gli strumenti non si distinguono.",lo:"Suono scavato e freddo."},
+ 500:{n:"Medi bassi",hi:"Effetto scatola, nasale.",lo:"Suono vuoto al centro."},
+ 1000:{n:"Medi",hi:"Suono in avanti e affaticante.",lo:"Voce arretrata, poca intelligibilità."},
+ 2000:{n:"Medi alti",hi:"Durezza sulle consonanti.",lo:"Parole poco distinte, attacchi smussati."},
+ 4000:{n:"Presenza",hi:"Asprezza e fatica d'ascolto, alto rischio di innesco.",lo:"Manca chiarezza e definizione."},
+ 8000:{n:"Brillantezza",hi:"Sibilanti marcate, suono tagliente.",lo:"Suono chiuso e opaco."},
+ 16000:{n:"Aria",hi:"Eccesso di aria, spesso rumore d'ambiente.",lo:"Manca respiro. In sale assorbenti è normale."}
+};
+
+let ctx=null,analyser=null,stream=null,src=null,freqDb=null,timeBuf=null,bands=[],running=false;
+let smooth=null,rafId=null;
+let analyzing=false,acc=null,accN=0,tEnd=0,lowFrames=0,clipFrames=0,frames=0,durSec=10;
+let results=[],frozen=null;
+let noiseNode=null,noisePlaying=false;
+
+const $=id=>document.getElementById(id);
+const cv=$("cv"),g=cv.getContext("2d");
+
+async function startMic(){
+  try{
+    ctx=new (window.AudioContext||window.webkitAudioContext)();
+    await ctx.resume();
+    stream=await navigator.mediaDevices.getUserMedia({audio:{
+      echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:1}});
+    src=ctx.createMediaStreamSource(stream);
+    analyser=ctx.createAnalyser();
+    analyser.fftSize=16384;analyser.smoothingTimeConstant=0;
+    analyser.minDecibels=-120;analyser.maxDecibels=0;
+    src.connect(analyser);
+    freqDb=new Float32Array(analyser.frequencyBinCount);
+    timeBuf=new Float32Array(analyser.fftSize);
+    bands=buildBands(ctx.sampleRate,analyser.frequencyBinCount);
+    smooth=null;running=true;
+    $("btnMic").textContent="Ferma";$("btnMic").classList.remove("primary");$("btnMic").classList.add("live");
+    ["btnNoise","btnRun","btnReset"].forEach(i=>$(i).disabled=false);
+    setLamp("on","Pronto");
+    loop();
+  }catch(e){
+    setLamp("","Microfono negato");
+    $("headline").textContent="Non riesco ad accedere al microfono.";
+    $("subline").textContent="Consenti l'accesso nelle impostazioni del browser e riprova. Su telefono la pagina deve essere aperta in HTTPS.";
+  }
+}
+function stopMic(){
+  running=false;analyzing=false;$("count").classList.remove("show");
+  if(rafId)cancelAnimationFrame(rafId);
+  stopNoise();
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  if(ctx)ctx.close();
+  ctx=null;analyser=null;stream=null;
+  $("btnMic").textContent="Attiva microfono";$("btnMic").classList.add("primary");$("btnMic").classList.remove("live");
+  ["btnNoise","btnRun","btnPos","btnReset"].forEach(i=>$(i).disabled=true);
+  setLamp("","In attesa");
+}
+function setLamp(c,t){$("led").className="led"+(c?" "+c:"");$("ledTxt").textContent=t;}
+
+function buildBands(sr,bc){
+  const df=sr/2/bc;
+  return CENTERS.map(c=>{
+    const lo=c/R6,hi=c*R6;
+    let i0=Math.round(lo/df),i1=Math.round(hi/df);
+    if(i1<=i0)i1=i0+1;
+    i0=Math.max(1,i0);i1=Math.min(bc-1,i1);
+    return {c,i0,i1,valid:hi<sr/2*0.95&&i0<bc-1};
+  });
+}
+function power(){
+  analyser.getFloatFrequencyData(freqDb);
+  const out=new Array(bands.length).fill(0);
+  for(let b=0;b<bands.length;b++){
+    const bd=bands[b];if(!bd.valid){out[b]=null;continue;}
+    let p=0;
+    for(let i=bd.i0;i<=bd.i1;i++){const v=freqDb[i];if(v>-200&&isFinite(v))p+=Math.pow(10,v/10);}
+    out[b]=p;
+  }
+  return out;
+}
+function toDb(p){return p.map(v=>v==null||v<=0?null:10*Math.log10(v));}
+function normalize(a){
+  let s=0,n=0;
+  a.forEach((v,i)=>{if(v!=null&&CENTERS[i]>=50&&CENTERS[i]<=10000){s+=v;n++;}});
+  const m=n?s/n:0;
+  return a.map(v=>v==null?null:v-m);
+}
+function rmsDbfs(){
+  analyser.getFloatTimeDomainData(timeBuf);
+  let s=0;for(let i=0;i<timeBuf.length;i++)s+=timeBuf[i]*timeBuf[i];
+  const r=Math.sqrt(s/timeBuf.length);
+  return r>0?20*Math.log10(r):-100;
+}
+
+function loop(){
+  if(!running)return;
+  rafId=requestAnimationFrame(loop);
+  const p=power();
+  const db=toDb(p);
+  if(!smooth)smooth=db.slice();
+  else db.forEach((v,i)=>{if(v!=null&&smooth[i]!=null)smooth[i]+=(v-smooth[i])*0.3;});
+
+  const lvl=rmsDbfs();
+  $("lvlBar").style.width=Math.max(0,Math.min(100,(lvl+70)/70*100))+"%";
+  $("lvlTxt").textContent=lvl.toFixed(1)+" dBFS";
+
+  if(analyzing){
+    frames++;
+    if(lvl<-52)lowFrames++;
+    if(lvl>-2)clipFrames++;
+    p.forEach((v,i)=>{if(v!=null)acc[i]+=v;});
+    accN++;
+    const left=Math.max(0,(tEnd-performance.now())/1000);
+    $("count").querySelector("b").textContent=Math.ceil(left);
+    draw(normalize(smooth));
+    if(left<=0)finish();
+  }else{
+    draw(frozen?frozen:normalize(smooth));
+  }
+}
+
+function begin(){
+  acc=CENTERS.map(()=>0);accN=0;frames=0;lowFrames=0;clipFrames=0;frozen=null;
+  tEnd=performance.now()+durSec*1000;
+  analyzing=true;
+  $("count").classList.add("show");
+  $("btnRun").disabled=true;$("btnPos").disabled=true;
+  setLamp("rec","Ascolto");
+  $("headline").textContent="Ascolto in corso…";
+  $("subline").textContent="Tieni il telefono fermo e non parlarci vicino: sto mediando "+durSec+" secondi di suono.";
+  $("plain").innerHTML="";$("cards").innerHTML="";$("detailWrap").style.display="none";$("note").textContent="";
+}
+function finish(){
+  analyzing=false;
+  $("count").classList.remove("show");
+  $("btnRun").disabled=false;$("btnRun").textContent="Rifai l'analisi";
+  const spec=normalize(toDb(acc.map(v=>v/Math.max(1,accN))));
+  frozen=spec;
+  const bad=lowFrames/frames>.4?"low":clipFrames/frames>.1?"clip":null;
+  if(bad){
+    setLamp("on","Misura non valida");
+    $("headline").textContent=bad==="low"?"Segnale troppo debole per giudicare.":"Microfono in saturazione.";
+    $("subline").textContent=bad==="low"
+      ?"Alza il volume dell'impianto o avvicinati: durante l'ascolto il livello deve stare stabilmente sopra −45 dBFS."
+      :"Allontanati dai diffusori o abbassa il volume: il microfono clippa e la lettura non ha senso.";
+    $("btnPos").disabled=true;
+    return;
+  }
+  setLamp("done","Analisi completata");
+  $("btnPos").disabled=false;
+  report(results.length?mean(results.concat([spec])):spec);
+}
+function mean(list){
+  return CENTERS.map((_,i)=>{
+    let s=0,n=0;list.forEach(p=>{if(p[i]!=null){s+=p[i];n++;}});
+    return n?s/n:null;
+  });
+}
+
+/* --- obiettivo --- */
+function targetAt(f){
+  const t=TARGETS[$("target").value];
+  if(f<=OCT[0])return t[OCT[0]];
+  if(f>=OCT[OCT.length-1])return t[OCT[OCT.length-1]];
+  for(let i=0;i<OCT.length-1;i++){
+    if(f>=OCT[i]&&f<=OCT[i+1]){
+      const r=(Math.log2(f)-Math.log2(OCT[i]))/(Math.log2(OCT[i+1])-Math.log2(OCT[i]));
+      return t[OCT[i]]+(t[OCT[i+1]]-t[OCT[i]])*r;
+    }
+  }
+  return 0;
+}
+function centeredTarget(){
+  const t=CENTERS.map(targetAt);
+  let s=0,n=0;
+  CENTERS.forEach((c,i)=>{if(c>=50&&c<=10000){s+=t[i];n++;}});
+  const m=n?s/n:0;
+  return t.map(v=>v-m);
+}
+
+/* --- referto --- */
+function report(sp){
+  const tgt=centeredTarget();
+  const dev=sp.map((v,i)=>v==null?null:v-tgt[i]);
+  const octDev=OCT.map(oc=>{
+    const lo=oc/1.42,hi=oc*1.42;let s=0,n=0;
+    CENTERS.forEach((c,i)=>{if(c>=lo&&c<hi&&dev[i]!=null){s+=dev[i];n++;}});
+    return n?s/n:null;
+  });
+
+  const short=[],blocks=[];
+  ZONES.forEach(z=>{
+    const vals=z.i.map(k=>octDev[k]).filter(v=>v!=null);
+    if(!vals.length)return;
+    const d=vals.reduce((a,b)=>a+b,0)/vals.length;
+    if(Math.abs(d)<z.min)return;
+    const lvl=Math.abs(d)<z.min+1.5?0:Math.abs(d)<6?1:2;
+    const up=d>0;
+    short.push(up?z.hi[lvl]:z.lo[lvl]);
+    blocks.push({up,t:up?z.hiT:z.loT,w:(up?z.hiW:z.loW),d});
+  });
+
+  if(!short.length){
+    $("headline").innerHTML="Suono equilibrato: <em>nessuna correzione necessaria</em>.";
+    $("subline").textContent="La risposta rientra entro pochi dB dall'obiettivo scelto. Se il suono comunque non ti convince, il problema è più acustico (riverbero, posizionamento dei diffusori) che di equalizzazione.";
+  }else{
+    const s=short.map((t,i)=>i===0?t.charAt(0).toUpperCase()+t.slice(1):t).join(", ");
+    $("headline").innerHTML="In sintesi: <em>"+s+"</em>.";
+    $("subline").textContent="Ecco cosa senti e come intervenire, in ordine di priorità. Parti dai tagli: liberano headroom e riducono il rischio di innesco.";
+  }
+  blocks.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+  $("plain").innerHTML=blocks.map(b=>
+    '<li class="'+(b.up?"up":"down")+'"><b>'+b.t+" &mdash; "+(b.up?"+":"−")+Math.abs(b.d).toFixed(1)+' dB</b><span>'+b.w+"</span></li>").join("");
+
+  /* dettaglio numerico per banda + picchi stretti */
+  const items=[];
+  for(let i=2;i<CENTERS.length-2;i++){
+    if(dev[i]==null)continue;
+    const nb=[dev[i-2],dev[i-1],dev[i+1],dev[i+2]].filter(v=>v!=null);
+    if(nb.length<3)continue;
+    const m=nb.reduce((a,b)=>a+b,0)/nb.length;
+    if(dev[i]-m>7&&CENTERS[i]>=100&&CENTERS[i]<=8000)
+      items.push({cls:"narrow",amt:"−"+Math.min(9,(dev[i]-m)*.7).toFixed(1),unit:"dB · Q 10",
+        title:CENTERS[i]+" Hz — picco stretto",
+        why:"Risonanza isolata di "+(dev[i]-m).toFixed(1)+" dB rispetto alle bande vicine: un modo della sala o una risonanza del diffusore. Va corretta con un parametrico stretto (Q≈10), non col grafico. È la frequenza che innescherà per prima con i microfoni aperti."});
+  }
+  octDev.forEach((d,i)=>{
+    if(d==null)return;
+    const oc=OCT[i],thr=(oc<=63||oc>=16000)?3:1.5;
+    if(Math.abs(d)<thr)return;
+    const amt=Math.max(-9,Math.min(9,-d)),w=WHY[oc];
+    items.push({cls:amt<0?"cut":"boost",amt:(amt>0?"+":"−")+Math.abs(amt).toFixed(1),unit:"dB · Q 1",
+      title:(oc>=1000?(oc/1000)+" kHz":oc+" Hz")+" — "+w.n,
+      why:(d>0?w.hi:w.lo)});
+  });
+  $("cards").innerHTML=items.map(it=>
+    '<li><div class="move '+it.cls+'">'+it.amt+"<small>"+it.unit+"</small></div>"+
+    '<div class="why"><b>'+it.title+"</b>"+it.why+"</div></li>").join("");
+  $("detailWrap").style.display=items.length?"block":"none";
+
+  $("note").innerHTML="<b>Da tenere presente.</b> Il microfono del telefono non è calibrato: sotto 50 Hz e sopra 12 kHz le letture sono indicative. I buchi profondi e stretti nei bassi sono cancellazioni della sala e <b>non si correggono con l'EQ</b>: si risolvono spostando diffusori o ascoltatore."+
+    (results.length?" Referto calcolato sulla media di "+(results.length+1)+" posizioni.":" Ripeti l'analisi in altri punti e premi \u201cAggiungi alla media\u201d per un risultato affidabile.");
+}
+
+/* --- grafico --- */
+const DBMIN=-24,DBMAX=18;
+function draw(sp){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const w=cv.clientWidth,h=cv.clientHeight;
+  if(cv.width!==w*dpr||cv.height!==h*dpr){cv.width=w*dpr;cv.height=h*dpr;}
+  g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,w,h);
+  const padL=26,padR=6,padT=8,padB=20,W=w-padL-padR,H=h-padT-padB;
+  const y=db=>padT+H*(DBMAX-db)/(DBMAX-DBMIN),bw=W/CENTERS.length;
+  g.strokeStyle="#1e2325";g.lineWidth=1;
+  g.fillStyle="#4c545a";g.font="9px ui-monospace,Menlo,monospace";g.textAlign="right";
+  for(let db=DBMIN;db<=DBMAX;db+=6){
+    const yy=Math.round(y(db))+.5;
+    g.beginPath();g.moveTo(padL,yy);g.lineTo(w-padR,yy);g.stroke();
+    g.fillText((db>0?"+":"")+db,padL-4,yy+3);
+  }
+  const tgt=centeredTarget();
+  g.textAlign="center";
+  CENTERS.forEach((c,i)=>{
+    if([31.5,125,500,2000,8000].includes(c)){
+      const x=padL+bw*(i+.5);
+      g.strokeStyle="#1a1e20";g.beginPath();g.moveTo(x,padT);g.lineTo(x,padT+H);g.stroke();
+      g.fillStyle="#5b6368";g.fillText(c>=1000?(c/1000)+"k":String(c),x,h-6);
+    }
+  });
+  if(sp)CENTERS.forEach((c,i)=>{
+    const v=sp[i];if(v==null)return;
+    const t=tgt[i],dev=v-t,x=padL+bw*i+1.2,ww=bw-2.4;
+    const y0=y(t),y1=y(Math.max(DBMIN,Math.min(DBMAX,v)));
+    g.fillStyle=dev>0?"rgba(255,176,46,.85)":"rgba(63,208,214,.8)";
+    g.fillRect(x,Math.min(y0,y1),ww,Math.max(1,Math.abs(y1-y0)));
+  });
+  g.strokeStyle="rgba(231,233,234,.9)";g.lineWidth=1.5;g.setLineDash([5,4]);
+  g.beginPath();
+  CENTERS.forEach((c,i)=>{const x=padL+bw*(i+.5),yy=y(tgt[i]);i?g.lineTo(x,yy):g.moveTo(x,yy);});
+  g.stroke();g.setLineDash([]);
+}
+
+/* --- rumore rosa --- */
+function makePink(){
+  const len=ctx.sampleRate*8,buf=ctx.createBuffer(1,len,ctx.sampleRate),d=buf.getChannelData(0);
+  let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+  for(let i=0;i<len;i++){
+    const w=Math.random()*2-1;
+    b0=0.99886*b0+w*0.0555179;b1=0.99332*b1+w*0.0750759;b2=0.96900*b2+w*0.1538520;
+    b3=0.86650*b3+w*0.3104856;b4=0.55000*b4+w*0.5329522;b5=-0.7616*b5-w*0.0168980;
+    d[i]=(b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11;b6=w*0.115926;
+  }
+  return buf;
+}
+function startNoise(){
+  const gn=ctx.createGain();gn.gain.value=0.0001;
+  noiseNode=ctx.createBufferSource();
+  noiseNode.buffer=makePink();noiseNode.loop=true;
+  noiseNode.connect(gn).connect(ctx.destination);noiseNode.start();
+  gn.gain.exponentialRampToValueAtTime(0.25,ctx.currentTime+0.6);
+  noisePlaying=true;$("btnNoise").textContent="Ferma rumore";$("btnNoise").classList.add("live");
+}
+function stopNoise(){
+  if(!noisePlaying)return;
+  try{noiseNode.stop();}catch(e){}
+  noiseNode=null;noisePlaying=false;
+  $("btnNoise").textContent="Rumore rosa";$("btnNoise").classList.remove("live");
+}
+
+/* --- eventi --- */
+$("btnMic").onclick=()=>running?stopMic():startMic();
+$("btnNoise").onclick=()=>noisePlaying?stopNoise():startNoise();
+$("btnRun").onclick=()=>{if(running&&!analyzing)begin();};
+$("btnPos").onclick=()=>{
+  if(!frozen)return;
+  results.push(frozen);
+  $("posInfo").textContent="· "+results.length+" misure in media";
+  $("btnPos").disabled=true;
+  setLamp("done",results.length+" misure salvate");
+  report(mean(results));
+};
+$("btnReset").onclick=()=>{
+  results=[];frozen=null;
+  $("posInfo").textContent="";$("plain").innerHTML="";$("cards").innerHTML="";
+  $("detailWrap").style.display="none";$("note").textContent="";
+  $("btnPos").disabled=true;$("btnRun").textContent="Ascolta e analizza";
+  $("headline").innerHTML="Misure azzerate. Premi <em>Ascolta e analizza</em> per ricominciare.";
+  $("subline").textContent="";
+  if(running)setLamp("on","Pronto");
+};
+document.querySelectorAll(".seg button").forEach(b=>{
+  b.onclick=()=>{
+    if(analyzing)return;
+    document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed","false"));
+    b.setAttribute("aria-pressed","true");
+    durSec=+b.dataset.dur;
+    $("count").querySelector("b").textContent=durSec;
+  };
+});
+$("target").onchange=()=>{
+  draw(frozen||(smooth?normalize(smooth):null));
+  if(frozen)report(results.length?mean(results.concat(results.includes(frozen)?[]:[frozen])):frozen);
+};
+window.addEventListener("resize",()=>draw(frozen||(smooth?normalize(smooth):null)));
+draw(null);
+</script>
+</body>
+</html>
