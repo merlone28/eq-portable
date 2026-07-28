@@ -125,11 +125,19 @@ ul.chips li{background:#22262a;border:1px solid #0d0f10;border-radius:12px;paddi
     <button id="btnNoise" disabled>Rumore rosa</button>
   </div>
   <div class="row"><button id="btnRun" class="big primary" disabled>Ascolta e analizza</button></div>
-  <div class="seg" role="group" aria-label="Durata dell'ascolto">
+  <div class="seg" id="durSeg" role="group" aria-label="Durata dell'ascolto">
     <button data-dur="10" aria-pressed="true">10 secondi</button>
     <button data-dur="20" aria-pressed="false">20 secondi</button>
     <button data-dur="30" aria-pressed="false">30 secondi</button>
   </div>
+  <label class="field">
+    <span class="silk">Modalità di misura</span>
+    <div class="seg" id="gateSeg" role="group" aria-label="Modalità di misura">
+      <button id="modeFixed" aria-pressed="true">Rumore fisso</button>
+      <button id="modeGate" aria-pressed="false">Parlato reale</button>
+    </div>
+  </label>
+  <div class="note">Rumore fisso: usa rumore rosa o un programma continuo per tutta la durata. Parlato reale: ignora le pause tra una frase e l'altra e usa solo i momenti in cui l'oratore parla davvero &mdash; utile per tarare durante un discorso vero, senza rumore rosa.</div>
   <label class="field">
     <span class="silk">Curva obiettivo</span>
     <select id="target">
@@ -138,6 +146,13 @@ ul.chips li{background:#22262a;border:1px solid #0d0f10;border-radius:12px;paddi
       <option value="speech">Parlato &mdash; conferenza, sala riunioni</option>
       <option value="hifi">Musica &mdash; hi-fi domestico</option>
     </select>
+  </label>
+  <label class="field">
+    <span class="silk">Dettaglio correzioni</span>
+    <div class="seg" id="eqSeg" role="group" aria-label="Dettaglio correzioni EQ">
+      <button id="eqParam" aria-pressed="true">Parametrico</button>
+      <button id="eqSimple3" aria-pressed="false">3 bande</button>
+    </div>
   </label>
   <div class="row">
     <button id="btnPos" disabled>Aggiungi alla media</button>
@@ -258,12 +273,29 @@ const WHY={
  16000:{n:"Aria",hi:"Eccesso di aria, spesso rumore d'ambiente.",lo:"Manca respiro. In sale assorbenti è normale."}
 };
 
+/* --- modalità semplificata: 3 bande larghe per mixer senza parametrico --- */
+const BROAD=[
+ {name:"Bassi",idx:[0,1,2,3],
+  hi:"Suono impastato o rimbombante: gira la manopola dei bassi verso il taglio.",
+  lo:"Voce sottile, senza corpo: alza leggermente i bassi."},
+ {name:"Medi",idx:[4,5,6],
+  hi:"Suono nasale o affaticante, consonanti dure: taglia leggermente i medi.",
+  lo:"Voce che non emerge, poco presente: alza leggermente i medi."},
+ {name:"Alti",idx:[7,8,9],
+  hi:"Sibilanti marcate, rischio di fischio: taglia gli alti.",
+  lo:"Voce opaca, poco chiara: alza leggermente gli alti."}
+];
+
+/* --- modalità "parlato reale": soglia sotto la quale un frame non conta come voce presente --- */
+const GATE_DB=-48;
+
 let ctx=null,analyser=null,stream=null,src=null,freqDb=null,timeBuf=null,bands=[],running=false;
 let smooth=null,rafId=null;
 let analyzing=false,acc=null,accN=0,tEnd=0,lowFrames=0,clipFrames=0,frames=0,durSec=10;
 let results=[],frozen=null;
 let noiseNode=null,noisePlaying=false;
 let ringActive=false,ringFast=null,ringSlow=null,ringStreak=null,ringCurrent=null,ringHits=[];
+let eqSimple=false,gateMode=false;
 
 const $=id=>document.getElementById(id);
 const cv=$("cv"),g=cv.getContext("2d");
@@ -360,8 +392,10 @@ function loop(){
     frames++;
     if(lvl<-52)lowFrames++;
     if(lvl>-2)clipFrames++;
-    p.forEach((v,i)=>{if(v!=null)acc[i]+=v;});
-    accN++;
+    if(!gateMode||lvl>GATE_DB){
+      p.forEach((v,i)=>{if(v!=null)acc[i]+=v;});
+      accN++;
+    }
     const left=Math.max(0,(tEnd-performance.now())/1000);
     $("count").querySelector("b").textContent=Math.ceil(left);
     draw(normalize(smooth));
@@ -379,7 +413,9 @@ function begin(){
   $("btnRun").disabled=true;$("btnPos").disabled=true;
   setLamp("rec","Ascolto");
   $("headline").textContent="Ascolto in corso…";
-  $("subline").textContent="Tieni il telefono fermo e non parlarci vicino: sto mediando "+durSec+" secondi di suono.";
+  $("subline").textContent=gateMode
+    ?"Lascia che l'oratore continui a parlare normale: ascolto per "+durSec+" s e uso solo i momenti in cui parla."
+    :"Tieni il telefono fermo e non parlarci vicino: sto mediando "+durSec+" secondi di suono.";
   $("plain").innerHTML="";$("cards").innerHTML="";$("detailWrap").style.display="none";$("note").textContent="";
 }
 function finish(){
@@ -388,12 +424,16 @@ function finish(){
   $("btnRun").disabled=false;$("btnRun").textContent="Rifai l'analisi";
   const spec=normalize(toDb(acc.map(v=>v/Math.max(1,accN))));
   frozen=spec;
-  const bad=lowFrames/frames>.4?"low":clipFrames/frames>.1?"clip":null;
+  const bad=gateMode
+    ?(accN/frames<0.25?"gatelow":(clipFrames/frames>.1?"clip":null))
+    :(lowFrames/frames>.4?"low":(clipFrames/frames>.1?"clip":null));
   if(bad){
     setLamp("on","Misura non valida");
-    $("headline").textContent=bad==="low"?"Segnale troppo debole per giudicare.":"Microfono in saturazione.";
+    $("headline").textContent=bad==="low"?"Segnale troppo debole per giudicare.":bad==="gatelow"?"Troppo poco parlato catturato.":"Microfono in saturazione.";
     $("subline").textContent=bad==="low"
       ?"Alza il volume dell'impianto o avvicinati: durante l'ascolto il livello deve stare stabilmente sopra −45 dBFS."
+      :bad==="gatelow"
+      ?"L'oratore ha parlato troppo poco durante la finestra di ascolto: fai continuare il discorso e ripeti, oppure avvicina il telefono al microfono."
       :"Allontanati dai diffusori o abbassa il volume: il microfono clippa e la lettura non ha senso.";
     $("btnPos").disabled=true;
     return;
@@ -464,27 +504,40 @@ function report(sp){
   $("plain").innerHTML=blocks.map(b=>
     '<li class="'+(b.up?"up":"down")+'"><b>'+b.t+" &mdash; "+(b.up?"+":"−")+Math.abs(b.d).toFixed(1)+' dB</b><span>'+b.w+"</span></li>").join("");
 
-  /* dettaglio numerico per banda + picchi stretti */
+  /* dettaglio numerico per banda + picchi stretti (parametrico), oppure 3 bande semplificate */
   const items=[];
-  for(let i=2;i<CENTERS.length-2;i++){
-    if(dev[i]==null)continue;
-    const nb=[dev[i-2],dev[i-1],dev[i+1],dev[i+2]].filter(v=>v!=null);
-    if(nb.length<3)continue;
-    const m=nb.reduce((a,b)=>a+b,0)/nb.length;
-    if(dev[i]-m>7&&CENTERS[i]>=100&&CENTERS[i]<=8000)
-      items.push({cls:"narrow",amt:"−"+Math.min(9,(dev[i]-m)*.7).toFixed(1),unit:"dB · Q 10",
-        title:CENTERS[i]+" Hz — picco stretto",
-        why:"Risonanza isolata di "+(dev[i]-m).toFixed(1)+" dB rispetto alle bande vicine: un modo della sala o una risonanza del diffusore. Va corretta con un parametrico stretto (Q≈10), non col grafico. È la frequenza che innescherà per prima con i microfoni aperti."});
+  if(!eqSimple){
+    for(let i=2;i<CENTERS.length-2;i++){
+      if(dev[i]==null)continue;
+      const nb=[dev[i-2],dev[i-1],dev[i+1],dev[i+2]].filter(v=>v!=null);
+      if(nb.length<3)continue;
+      const m=nb.reduce((a,b)=>a+b,0)/nb.length;
+      if(dev[i]-m>7&&CENTERS[i]>=100&&CENTERS[i]<=8000)
+        items.push({cls:"narrow",amt:"−"+Math.min(9,(dev[i]-m)*.7).toFixed(1),unit:"dB · Q 10",
+          title:CENTERS[i]+" Hz — picco stretto",
+          why:"Risonanza isolata di "+(dev[i]-m).toFixed(1)+" dB rispetto alle bande vicine: un modo della sala o una risonanza del diffusore. Va corretta con un parametrico stretto (Q≈10), non col grafico. È la frequenza che innescherà per prima con i microfoni aperti."});
+    }
+    octDev.forEach((d,i)=>{
+      if(d==null)return;
+      const oc=OCT[i],thr=(oc<=63||oc>=16000)?3:1.5;
+      if(Math.abs(d)<thr)return;
+      const amt=Math.max(-9,Math.min(9,-d)),w=WHY[oc];
+      items.push({cls:amt<0?"cut":"boost",amt:(amt>0?"+":"−")+Math.abs(amt).toFixed(1),unit:"dB · Q 1",
+        title:(oc>=1000?(oc/1000)+" kHz":oc+" Hz")+" — "+w.n,
+        why:(d>0?w.hi:w.lo)});
+    });
+  }else{
+    BROAD.forEach(b=>{
+      const vals=b.idx.map(i=>octDev[i]).filter(v=>v!=null);
+      if(!vals.length)return;
+      const d=vals.reduce((a,c2)=>a+c2,0)/vals.length;
+      if(Math.abs(d)<2)return;
+      const amt=Math.max(-9,Math.min(9,-d));
+      items.push({cls:amt<0?"cut":"boost",amt:(amt>0?"+":"−")+Math.abs(amt).toFixed(1),unit:"dB",
+        title:b.name,
+        why:(d>0?b.hi:b.lo)});
+    });
   }
-  octDev.forEach((d,i)=>{
-    if(d==null)return;
-    const oc=OCT[i],thr=(oc<=63||oc>=16000)?3:1.5;
-    if(Math.abs(d)<thr)return;
-    const amt=Math.max(-9,Math.min(9,-d)),w=WHY[oc];
-    items.push({cls:amt<0?"cut":"boost",amt:(amt>0?"+":"−")+Math.abs(amt).toFixed(1),unit:"dB · Q 1",
-      title:(oc>=1000?(oc/1000)+" kHz":oc+" Hz")+" — "+w.n,
-      why:(d>0?w.hi:w.lo)});
-  });
   $("cards").innerHTML=items.map(it=>
     '<li><div class="move '+it.cls+'">'+it.amt+"<small>"+it.unit+"</small></div>"+
     '<div class="why"><b>'+it.title+"</b>"+it.why+"</div></li>").join("");
@@ -645,7 +698,7 @@ $("btnReset").onclick=()=>{
   $("subline").textContent="";
   if(running)setLamp("on","Pronto");
 };
-document.querySelectorAll(".seg button").forEach(b=>{
+document.querySelectorAll("#durSeg button").forEach(b=>{
   b.onclick=()=>{
     if(analyzing)return;
     document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed","false"));
@@ -658,6 +711,22 @@ $("target").onchange=()=>{
   draw(frozen||(smooth?normalize(smooth):null));
   if(frozen)report(results.length?mean(results.concat(results.includes(frozen)?[]:[frozen])):frozen);
 };
+function setEqMode(simple){
+  eqSimple=simple;
+  $("eqParam").setAttribute("aria-pressed",simple?"false":"true");
+  $("eqSimple3").setAttribute("aria-pressed",simple?"true":"false");
+  if(frozen)report(results.length?mean(results.concat(results.includes(frozen)?[]:[frozen])):frozen);
+}
+$("eqParam").onclick=()=>setEqMode(false);
+$("eqSimple3").onclick=()=>setEqMode(true);
+function setGateMode(g){
+  if(analyzing)return;
+  gateMode=g;
+  $("modeFixed").setAttribute("aria-pressed",g?"false":"true");
+  $("modeGate").setAttribute("aria-pressed",g?"true":"false");
+}
+$("modeFixed").onclick=()=>setGateMode(false);
+$("modeGate").onclick=()=>setGateMode(true);
 window.addEventListener("resize",()=>draw(frozen||(smooth?normalize(smooth):null)));
 draw(null);
 
