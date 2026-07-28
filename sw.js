@@ -1,6 +1,6 @@
 "use strict";
 /* Bump la versione a ogni rilascio: forza la pulizia delle cache vecchie. */
-const CACHE = "rta-eq-v2";
+const CACHE = "rta-eq-v3";
 const ASSETS = [
   "./",
   "./index.html",
@@ -14,7 +14,9 @@ const ASSETS = [
 self.addEventListener("install", e => {
   e.waitUntil(
     caches.open(CACHE)
-      .then(c => c.addAll(ASSETS))
+      /* cache:"reload" = ignora la cache HTTP del browser, altrimenti il precache
+         può salvare una versione vecchia servita da GitHub Pages (max-age). */
+      .then(c => c.addAll(ASSETS.map(u => new Request(u, {cache: "reload"}))))
       .then(() => self.skipWaiting())
   );
 });
@@ -45,7 +47,9 @@ self.addEventListener("fetch", e => {
 
   if (isHtml(req)) {
     e.respondWith(
-      fetch(req)
+      /* no-store: senza questo la fetch può restituire l'HTML dalla cache HTTP
+         del browser e l'aggiornamento non arriva comunque all'utente. */
+      fetch(req, {cache: "no-store"})
         .then(res => {
           if (res && res.ok) {
             const copy = res.clone();
