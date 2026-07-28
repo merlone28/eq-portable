@@ -94,6 +94,10 @@ hr.etch{border:0;border-top:1px solid var(--etch);border-bottom:1px solid #0a0c0
 .legend .a::before{background:var(--phos)}.legend .b::before{background:var(--cool)}.legend .c::before{background:var(--target)}
 details summary{cursor:pointer;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--silk-dim);font-weight:700;padding:4px 0}
 details[open] summary{color:var(--silk)}
+.ringAlert{font-size:14px;line-height:1.5;color:#aab2b7;margin-top:4px;padding:10px 12px;border-radius:4px;background:#15181a;border:1px solid #0a0c0d}
+.ringAlert.hot{color:#ffd9d6;background:#3a1512;border-color:#5a1f1a;font-weight:600}
+ul.chips{list-style:none;display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0;padding:0}
+ul.chips li{background:#22262a;border:1px solid #0d0f10;border-radius:12px;padding:5px 10px;font-size:11.5px;color:#e7e9ea;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -147,6 +151,18 @@ details[open] summary{color:var(--silk)}
     <div class="meter"><div class="silk">Livello ingresso</div><div class="bar"><i id="lvlBar"></i></div></div>
     <div class="val" id="lvlTxt">&mdash;&mdash; dBFS</div>
   </div>
+</section>
+
+<section class="rack" id="ringSection">
+  <div class="silk">Rilevatore di fischio (feedback)</div>
+  <hr class="etch">
+  <div class="row">
+    <button id="btnRing" disabled>Cerca fischio</button>
+    <button id="btnRingClear" disabled>Azzera elenco</button>
+  </div>
+  <div class="ringAlert" id="ringAlert">Attiva il microfono e premi Cerca fischio prima di alzare il volume.</div>
+  <ul class="chips" id="ringList"></ul>
+  <div class="note">Alza lentamente il guadagno del canale (o il volume generale) mentre l'oratore parla normale. Quando l'impianto sta per innescare, qui sopra compare la frequenza: tagliala con un parametrico stretto (Q 8&ndash;10 circa) prima di continuare ad alzare.</div>
 </section>
 
 <section class="rack" id="report">
@@ -240,6 +256,7 @@ let smooth=null,rafId=null;
 let analyzing=false,acc=null,accN=0,tEnd=0,lowFrames=0,clipFrames=0,frames=0,durSec=10;
 let results=[],frozen=null;
 let noiseNode=null,noisePlaying=false;
+let ringActive=false,ringFast=null,ringSlow=null,ringStreak=null,ringCurrent=null,ringHits=[];
 
 const $=id=>document.getElementById(id);
 const cv=$("cv"),g=cv.getContext("2d");
@@ -260,7 +277,7 @@ async function startMic(){
     bands=buildBands(ctx.sampleRate,analyser.frequencyBinCount);
     smooth=null;running=true;
     $("btnMic").textContent="Ferma";$("btnMic").classList.remove("primary");$("btnMic").classList.add("live");
-    ["btnNoise","btnRun","btnReset"].forEach(i=>$(i).disabled=false);
+    ["btnNoise","btnRun","btnReset","btnRing","btnRingClear"].forEach(i=>$(i).disabled=false);
     setLamp("on","Pronto");
     loop();
   }catch(e){
@@ -273,11 +290,13 @@ function stopMic(){
   running=false;analyzing=false;$("count").classList.remove("show");
   if(rafId)cancelAnimationFrame(rafId);
   stopNoise();
+  if(ringActive)stopRing();
+  ringHits=[];renderRingHits();
   if(stream)stream.getTracks().forEach(t=>t.stop());
   if(ctx)ctx.close();
   ctx=null;analyser=null;stream=null;
   $("btnMic").textContent="Attiva microfono";$("btnMic").classList.add("primary");$("btnMic").classList.remove("live");
-  ["btnNoise","btnRun","btnPos","btnReset"].forEach(i=>$(i).disabled=true);
+  ["btnNoise","btnRun","btnPos","btnReset","btnRing","btnRingClear"].forEach(i=>$(i).disabled=true);
   setLamp("","In attesa");
 }
 function setLamp(c,t){$("led").className="led"+(c?" "+c:"");$("ledTxt").textContent=t;}
@@ -324,6 +343,7 @@ function loop(){
   const db=toDb(p);
   if(!smooth)smooth=db.slice();
   else db.forEach((v,i)=>{if(v!=null&&smooth[i]!=null)smooth[i]+=(v-smooth[i])*0.3;});
+  if(ringActive)checkFeedback();
 
   const lvl=rmsDbfs();
   $("lvlBar").style.width=Math.max(0,Math.min(100,(lvl+70)/70*100))+"%";
@@ -503,6 +523,69 @@ function draw(sp){
   g.beginPath();
   CENTERS.forEach((c,i)=>{const x=padL+bw*(i+.5),yy=y(tgt[i]);i?g.lineTo(x,yy):g.moveTo(x,yy);});
   g.stroke();g.setLineDash([]);
+  if(ringActive&&ringCurrent){
+    const rx=padL+bw*(ringCurrent.i+.5);
+    g.strokeStyle="rgba(255,95,86,.9)";g.lineWidth=2;
+    g.beginPath();g.moveTo(rx,padT);g.lineTo(rx,padT+H);g.stroke();
+    g.fillStyle="#ff5f56";g.font="9px ui-monospace,Menlo,monospace";g.textAlign="center";
+    g.fillText(fmtFreq(ringCurrent.c),rx,padT+10);
+  }
+}
+
+/* --- rilevatore di fischio (feedback) --- */
+function fmtFreq(c){return c>=1000?(c/1000)+" kHz":c+" Hz";}
+function startRing(){
+  ringActive=true;
+  ringFast=CENTERS.map(()=>null);ringSlow=CENTERS.map(()=>null);ringStreak=CENTERS.map(()=>0);
+  ringCurrent=null;
+  $("btnRing").textContent="Ferma ricerca";$("btnRing").classList.add("live");
+  $("ringAlert").className="ringAlert";
+  $("ringAlert").textContent="In ascolto… alza lentamente il volume.";
+}
+function stopRing(){
+  ringActive=false;ringFast=null;ringSlow=null;ringStreak=null;ringCurrent=null;
+  $("btnRing").textContent="Cerca fischio";$("btnRing").classList.remove("live");
+  $("ringAlert").className="ringAlert";
+  $("ringAlert").textContent="Attiva il microfono e premi Cerca fischio prima di alzare il volume.";
+}
+function checkFeedback(){
+  let best=null;
+  for(let i=2;i<CENTERS.length-2;i++){
+    const c=CENTERS[i];
+    if(c<100||c>8000)continue;
+    if(smooth[i]==null)continue;
+    const nb=[smooth[i-2],smooth[i-1],smooth[i+1],smooth[i+2]].filter(v=>v!=null);
+    if(nb.length<3)continue;
+    const m=nb.reduce((a,b)=>a+b,0)/nb.length;
+    const prom=smooth[i]-m;
+    if(ringFast[i]==null){ringFast[i]=prom;ringSlow[i]=prom;}
+    else{ringFast[i]+=(prom-ringFast[i])*0.45;ringSlow[i]+=(prom-ringSlow[i])*0.035;}
+    const rise=ringFast[i]-ringSlow[i];
+    const hot=ringFast[i]>6.5&&rise>3.5;
+    ringStreak[i]=hot?Math.min(30,ringStreak[i]+1):Math.max(0,ringStreak[i]-2);
+    if(ringStreak[i]>=5&&(!best||ringFast[i]>best.amt))best={i,c,amt:ringFast[i]};
+  }
+  if(best){
+    ringCurrent=best;
+    $("ringAlert").className="ringAlert hot";
+    $("ringAlert").textContent="Possibile innesco a "+fmtFreq(best.c)+" (+"+best.amt.toFixed(1)+" dB) — taglia qui.";
+    recordRingHit(best);
+    if(navigator.vibrate)navigator.vibrate(120);
+  }else{
+    ringCurrent=null;
+    $("ringAlert").className="ringAlert";
+    $("ringAlert").textContent="In ascolto… alza lentamente il volume.";
+  }
+}
+function recordRingHit(b){
+  const ex=ringHits.find(h=>h.i===b.i);
+  if(ex){if(b.amt>ex.amt)ex.amt=b.amt;}
+  else{ringHits.push({i:b.i,c:b.c,amt:b.amt});}
+  ringHits.sort((a,b2)=>a.c-b2.c);
+  renderRingHits();
+}
+function renderRingHits(){
+  $("ringList").innerHTML=ringHits.map(h=>"<li>"+fmtFreq(h.c)+" · +"+h.amt.toFixed(1)+" dB</li>").join("");
 }
 
 /* --- rumore rosa --- */
@@ -535,6 +618,8 @@ function stopNoise(){
 /* --- eventi --- */
 $("btnMic").onclick=()=>running?stopMic():startMic();
 $("btnNoise").onclick=()=>noisePlaying?stopNoise():startNoise();
+$("btnRing").onclick=()=>ringActive?stopRing():startRing();
+$("btnRingClear").onclick=()=>{ringHits=[];renderRingHits();};
 $("btnRun").onclick=()=>{if(running&&!analyzing)begin();};
 $("btnPos").onclick=()=>{
   if(!frozen)return;
