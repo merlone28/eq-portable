@@ -81,16 +81,25 @@ Percorso previsto: GitHub Pages → aggiunta alla home del telefono. Nessuna bui
 
 **Fatto (28/07/2026):** rilevatore di fischio (feedback) in tempo reale — vedi sezione dedicata sopra. Pensato per l'uso principale dell'app: voci di oratori su mixer analogico/digitale in una Sala del Regno.
 
+**Fatto (28/07/2026):** installabilità reale — `manifest.json`, `sw.js` (service worker) e icone (`icon.svg`, `icon-192.png`, `icon-512.png`, `apple-touch-icon.png`, `favicon-32.png`). Vedi sezione dedicata sotto.
+
 Priorità pensate per lo stesso caso d'uso (parlato dal vivo, mixer semplice, sala di culto):
 
 1. **Traduzione dei consigli per mixer a 3 bande:** oggi l'app ragiona per bande fini (fino a 31) presupponendo un parametrico. Molti mixer da Sala del Regno hanno solo bassi/medi/alti shelf. Aggiungere una modalità che riduce i consigli fini a un'unica indicazione per banda larga.
 2. **Misura "a gate" durante il parlato reale:** invece di scartare l'intera misura se ci sono troppi frame sotto soglia (pause tra una frase e l'altra), accumulare solo i frame sopra una soglia di attivazione. Permetterebbe di tarare durante un discorso vero senza rumore rosa.
 3. **Esportazione del referto** (testo o PNG del grafico) da mandare a chi opera il mixer, se non è la stessa persona che tiene il telefono.
 4. **Persistenza delle misure** in `localStorage`, con nome della sala — utile per chi gira più congregazioni.
-5. **Manifest PWA + service worker** per l'installazione vera e l'uso offline garantito (oggi funziona offline solo perché non ha dipendenze, ma il browser può comunque non averla in cache).
-6. **Confronto prima/dopo:** salvare una misura come riferimento e mostrare le due curve sovrapposte per verificare l'effetto delle correzioni applicate.
-7. **Curva obiettivo personalizzabile** dall'utente, trascinando i punti sul grafico.
-8. **Correzione della risposta del microfono:** permettere il caricamento di un file di calibrazione, se si vuole usare un mic di misura esterno.
+5. **Confronto prima/dopo:** salvare una misura come riferimento e mostrare le due curve sovrapposte per verificare l'effetto delle correzioni applicate.
+6. **Curva obiettivo personalizzabile** dall'utente, trascinando i punti sul grafico.
+7. **Correzione della risposta del microfono:** permettere il caricamento di un file di calibrazione, se si vuole usare un mic di misura esterno.
+
+## Installabilità (PWA) — come funziona
+
+- `manifest.json`: nome, icone, `display:"standalone"`, `theme_color`/`background_color` coerenti con la UI (`#16181a`/`#101214`).
+- `sw.js`: service worker cache-first con fallback di rete, cache versione `rta-eq-v1`, precarica la shell (`index.html`, manifest, icone). Registrato in fondo allo `<script>` di `rta-equalizzazione.html` con `navigator.serviceWorker.register("sw.js")`, avvolto in un controllo `"serviceWorker" in navigator` e un `.catch(()=>{})` silenzioso: se il service worker non parte (es. `file://` locale, dove i service worker non sono supportati) l'app funziona comunque, solo senza cache offline garantita.
+- Icone: `icon.svg` è il sorgente (barre di uno spettro ambra/ciano su sfondo scuro, con la linea tratteggiata dell'obiettivo, in stile con la UI); esportate in PNG con cairosvg a 512, 192, 180 (apple-touch-icon) e 32 px (favicon). Sono full-bleed e il contenuto rientra nella "safe zone" delle icone maskable, quindi lo stesso file serve sia per `purpose:"any"` che `"maskable"`.
+- **Su Android/Chrome desktop:** con manifest + service worker attivi, il browser offre "Installa app"/"Aggiungi a schermata Home" con l'icona vera.
+- **Su iOS/Safari:** "Aggiungi a Home" ha sempre funzionato per qualsiasi sito, ma senza i meta tag `apple-touch-icon` e `apple-mobile-web-app-capable` usava uno screenshot della pagina invece dell'icona ed apriva dentro Safari. Ora usa l'icona vera e apre a schermo intero come app.
 
 ## Nota operativa per la prossima sessione
 
