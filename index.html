@@ -75,6 +75,12 @@ canvas{width:100%;height:250px;display:block;touch-action:none}
 .count span#countTxt{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--silk)}
 .capDot{width:9px;height:9px;border-radius:50%;background:#3a2a12;flex:none;transition:background .12s linear,box-shadow .12s linear}
 .capDot.on{background:var(--alert);box-shadow:0 0 9px var(--alert)}
+.lvlVerdict{margin-top:10px;padding:10px 12px;border-radius:4px;background:#15181a;border:1px solid #0a0c0d;
+  font-size:13px;line-height:1.5;color:#aab2b7}
+.lvlVerdict b{display:block;font-size:14px;margin-bottom:3px;font-weight:600}
+.lvlVerdict b.vOk{color:var(--ok)}
+.lvlVerdict b.vWarn{color:var(--phos)}
+.lvlVerdict b.vBad{color:var(--alert)}
 .meters{display:flex;gap:14px;align-items:center;margin-top:10px;flex-wrap:wrap}
 .meter{flex:1 1 150px}
 .bar{height:8px;background:#0c0e0f;border:1px solid #000;box-shadow:0 0 0 1px #3a4045;border-radius:2px;overflow:hidden}
@@ -238,6 +244,7 @@ body.easy li .move{font-size:22px;min-width:80px}
   <hr class="etch">
   <div class="headline" id="headline">Attiva il microfono, poi premi <em>Analizza la sala</em>.</div>
   <div class="sub" id="subline">L'app ascolta, valuta com'è il suono in sala e ti dice cosa correggere sul mixer, in parole semplici.</div>
+  <div class="lvlVerdict" id="lvlVerdict" style="display:none"></div>
   <ul class="plain" id="plain"></ul>
   <div id="detailWrap" style="display:none">
     <hr class="etch">
@@ -351,6 +358,25 @@ let results=[],frozen=null;
 let noiseNode=null,noisePlaying=false;
 let ringActive=false,ringFast=null,ringSlow=null,ringStreak=null,ringCurrent=null,ringHits=[];
 let eqSimple=false,gateMode=false,appMode="easy";
+let lvlSmooth=null,lvlSum=0,lvlN=0,lastLvl=null;
+
+/* --- giudizio sul livello che arriva al microfono ---
+   Attenzione: è il livello in ingresso al telefono (dBFS), NON un valore di SPL
+   calibrato. Dice se il volume è adatto a fare la misura e, di riflesso, se in
+   sala si sta esagerando o si è troppo bassi; non sostituisce un fonometro. */
+function levelInfo(db){
+  if(db==null)return null;
+  if(db<-52)return{t:"troppo basso",c:"vBad",
+    w:"Al telefono arriva pochissimo segnale. Alza il volume dell'impianto oppure avvicinati ai diffusori: così com'è, la misura non è affidabile."};
+  if(db<-45)return{t:"un po' basso",c:"vWarn",
+    w:"Si sente, ma sei al limite: la misura è meno precisa. Se puoi, alza un po' il volume dell'impianto."};
+  if(db<-12)return{t:"va bene così",c:"vOk",
+    w:"Il volume è nell'intervallo giusto per una misura affidabile."};
+  if(db<-3)return{t:"un po' alto",c:"vWarn",
+    w:"Il volume è alto: sei vicino al limite del microfono del telefono. Per la misura va ancora bene, ma non alzare oltre."};
+  return{t:"troppo alto",c:"vBad",
+    w:"Il microfono del telefono è in saturazione: la lettura non è attendibile. Abbassa il volume dell'impianto o allontanati dai diffusori."};
+}
 
 const $=id=>document.getElementById(id);
 const cv=$("cv"),g=cv.getContext("2d");
@@ -441,7 +467,14 @@ function loop(){
 
   const lvl=rmsDbfs();
   $("lvlBar").style.width=Math.max(0,Math.min(100,(lvl+70)/70*100))+"%";
-  $("lvlTxt").textContent=lvl.toFixed(1)+" dBFS";
+  /* etichetta smussata: in modalità semplice una parola, in avanzata i dBFS */
+  lvlSmooth=(lvlSmooth==null)?lvl:lvlSmooth+(lvl-lvlSmooth)*0.08;
+  if(appMode==="easy"){
+    const li=levelInfo(lvlSmooth);
+    $("lvlTxt").textContent=li?li.t:"—";
+  }else{
+    $("lvlTxt").textContent=lvl.toFixed(1)+" dBFS";
+  }
 
   if(analyzing){
     frames++;
@@ -451,6 +484,7 @@ function loop(){
     if(capturing){
       p.forEach((v,i)=>{if(v!=null)acc[i]+=v;});
       accN++;
+      lvlSum+=lvl;lvlN++;   /* livello medio solo sui momenti con segnale */
     }
     /* spia: rossa quando sta effettivamente accumulando. In "parlato reale"
        si spegne sulle pause, così si vede che il gate sta lavorando. */
@@ -467,6 +501,7 @@ function loop(){
 
 function begin(){
   acc=CENTERS.map(()=>0);accN=0;frames=0;lowFrames=0;clipFrames=0;frozen=null;
+  lvlSum=0;lvlN=0;lastLvl=null;
   tEnd=performance.now()+durSec*1000;
   analyzing=true;
   $("count").classList.add("show");
@@ -479,6 +514,7 @@ function begin(){
     ?"Lascia che l'oratore continui a parlare normale: ascolto per "+durSec+" s e uso solo i momenti in cui parla."
     :"Tieni il telefono fermo e non parlarci vicino: sto mediando "+durSec+" secondi di suono.";
   $("plain").innerHTML="";$("cards").innerHTML="";$("detailWrap").style.display="none";$("note").textContent="";
+  $("lvlVerdict").style.display="none";$("lvlVerdict").innerHTML="";
 }
 function finish(){
   analyzing=false;
@@ -486,6 +522,8 @@ function finish(){
   $("btnRun").disabled=false;$("btnRun").textContent="Rifai l'analisi";
   const spec=normalize(toDb(acc.map(v=>v/Math.max(1,accN))));
   frozen=spec;
+  lastLvl=lvlN?lvlSum/lvlN:null;
+  showLevelVerdict();
   const bad=gateMode
     ?(accN/frames<0.25?"gatelow":(clipFrames/frames>.1?"clip":null))
     :(lowFrames/frames>.4?"low":(clipFrames/frames>.1?"clip":null));
@@ -503,6 +541,13 @@ function finish(){
   setLamp("done","Analisi completata");
   $("btnPos").disabled=false;
   report(results.length?mean(results.concat([spec])):spec);
+}
+function showLevelVerdict(){
+  const li=levelInfo(lastLvl),el=$("lvlVerdict");
+  if(!li){el.style.display="none";el.innerHTML="";return;}
+  el.style.display="block";
+  el.innerHTML='<b class="'+li.c+'">Volume in sala: '+li.t+"</b>"+li.w+
+    (appMode==="easy"?"":' <span style="opacity:.65">(livello medio al microfono '+lastLvl.toFixed(1)+" dBFS, non è una misura di SPL calibrata)</span>");
 }
 function mean(list){
   return CENTERS.map((_,i)=>{
@@ -764,9 +809,10 @@ $("btnPos").onclick=()=>{
   report(mean(results));
 };
 $("btnReset").onclick=()=>{
-  results=[];frozen=null;
+  results=[];frozen=null;lastLvl=null;
   $("posInfo").textContent="";$("plain").innerHTML="";$("cards").innerHTML="";
   $("detailWrap").style.display="none";$("note").textContent="";
+  $("lvlVerdict").style.display="none";$("lvlVerdict").innerHTML="";
   $("btnPos").disabled=true;$("btnRun").textContent=runLabel();
   $("headline").innerHTML="Misure azzerate. Premi <em>"+runLabel()+"</em> per ricominciare.";
   $("subline").textContent="";
@@ -836,6 +882,7 @@ function setAppMode(m){
   $("btnPos").textContent=posLabel();
   try{localStorage.setItem("rtaAppMode",m);}catch(e){}
   if(frozen)report(results.length?mean(results.concat(results.includes(frozen)?[]:[frozen])):frozen);
+  if(lastLvl!=null)showLevelVerdict();   /* il testo cambia tra easy e pro */
   draw(frozen||(smooth?normalize(smooth):null));
 }
 $("modeEasy").onclick=()=>setAppMode("easy");

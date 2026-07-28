@@ -1,6 +1,6 @@
 "use strict";
 /* Bump la versione a ogni rilascio: forza la pulizia delle cache vecchie. */
-const CACHE = "rta-eq-v5";
+const CACHE = "rta-eq-v6";
 const ASSETS = [
   "./",
   "./index.html",
