@@ -65,11 +65,16 @@ select{width:100%;font:inherit;font-size:13px;color:#d7dbdd;background:#22262a;
   box-shadow:0 0 0 1px #3a4045,0 6px 18px rgba(0,0,0,.6) inset;padding:8px 6px 4px;position:relative}
 canvas{width:100%;height:250px;display:block;touch-action:none}
 @media(max-width:520px){canvas{height:200px}}
-.count{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;
-  background:rgba(12,14,15,.72);border-radius:3px}
+/* Badge d'angolo, non più un pannello che copre tutto: durante l'ascolto
+   il grafico deve restare visibile e in movimento. */
+.count{position:absolute;top:10px;right:10px;display:none;align-items:center;gap:9px;
+  background:rgba(12,14,15,.86);border:1px solid #0a0c0d;border-radius:4px;padding:6px 11px;
+  box-shadow:0 2px 8px rgba(0,0,0,.5)}
 .count.show{display:flex}
-.count b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:58px;color:var(--phos);line-height:1;font-weight:400}
-.count span{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--silk);margin-top:10px}
+.count b{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:26px;color:var(--phos);line-height:1;font-weight:400;min-width:30px;text-align:right}
+.count span#countTxt{font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--silk)}
+.capDot{width:9px;height:9px;border-radius:50%;background:#3a2a12;flex:none;transition:background .12s linear,box-shadow .12s linear}
+.capDot.on{background:var(--alert);box-shadow:0 0 9px var(--alert)}
 .meters{display:flex;gap:14px;align-items:center;margin-top:10px;flex-wrap:wrap}
 .meter{flex:1 1 150px}
 .bar{height:8px;background:#0c0e0f;border:1px solid #000;box-shadow:0 0 0 1px #3a4045;border-radius:2px;overflow:hidden}
@@ -152,7 +157,7 @@ body.easy li .move{font-size:22px;min-width:80px}
   <ol class="steps">
     <li>Premi <b>Attiva microfono</b> e consenti l'accesso quando il telefono lo chiede.</li>
     <li>Mettiti <b>in mezzo alla sala</b>, tieni il telefono all'altezza della testa di una persona seduta e non coprire il microfono con la mano.</li>
-    <li>Mentre <b>l'oratore parla normalmente</b> dall'impianto, premi <b>Analizza la sala</b> e resta fermo per il conto alla rovescia.</li>
+    <li>Mentre <b>l'oratore parla normalmente</b> dall'impianto, premi <b>Analizza la sala</b> e resta fermo per il conto alla rovescia. Durante l'ascolto le barre del grafico si muovono e la spia rossa si accende quando sta registrando la voce: è il segno che sta funzionando.</li>
     <li>Leggi i consigli qui sotto e applicali sul mixer. <b>Parti sempre dai tagli</b>, poi eventuali aumenti, muovendo poco per volta.</li>
     <li>Se puoi, ripeti in 2&ndash;3 punti diversi della sala premendo <b>Misura in un altro punto</b>: il risultato diventa molto più affidabile.</li>
   </ol>
@@ -203,7 +208,7 @@ body.easy li .move{font-size:22px;min-width:80px}
 <section class="rack">
   <div class="screen">
     <canvas id="cv"></canvas>
-    <div class="count" id="count"><b>10</b><span id="countTxt">Ascolto in corso</span></div>
+    <div class="count" id="count"><span class="capDot" id="capDot"></span><b>10</b><span id="countTxt">Ascolto</span></div>
   </div>
   <div class="legend">
     <span class="c">Obiettivo</span><span class="a">In eccesso</span><span class="b">In difetto</span>
@@ -442,10 +447,15 @@ function loop(){
     frames++;
     if(lvl<-52)lowFrames++;
     if(lvl>-2)clipFrames++;
-    if(!gateMode||lvl>GATE_DB){
+    const capturing=(!gateMode||lvl>GATE_DB);
+    if(capturing){
       p.forEach((v,i)=>{if(v!=null)acc[i]+=v;});
       accN++;
     }
+    /* spia: rossa quando sta effettivamente accumulando. In "parlato reale"
+       si spegne sulle pause, così si vede che il gate sta lavorando. */
+    $("capDot").className="capDot"+(capturing?" on":"");
+    $("countTxt").textContent=gateMode?(capturing?"Registra":"Pausa"):"Ascolto";
     const left=Math.max(0,(tEnd-performance.now())/1000);
     $("count").querySelector("b").textContent=Math.ceil(left);
     draw(normalize(smooth));
@@ -460,6 +470,8 @@ function begin(){
   tEnd=performance.now()+durSec*1000;
   analyzing=true;
   $("count").classList.add("show");
+  $("capDot").className="capDot";
+  $("countTxt").textContent=gateMode?"Pausa":"Ascolto";
   $("btnRun").disabled=true;$("btnPos").disabled=true;
   setLamp("rec","Ascolto");
   $("headline").textContent="Ascolto in corso…";
