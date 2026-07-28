@@ -314,17 +314,26 @@ const WHY={
  16000:{n:"Aria",hi:"Eccesso di aria, spesso rumore d'ambiente.",lo:"Manca respiro. In sale assorbenti è normale."}
 };
 
-/* --- modalità semplificata: 3 bande larghe per mixer senza parametrico --- */
+/* --- modalità semplificata: 3 bande larghe per mixer senza parametrico ---
+   I gruppi sono definiti sulle ZONE d'ascolto, non sulle bande d'ottava: così i
+   consigli sul mixer non possono mai contraddire il testo in linguaggio comune.
+   (Prima erano definiti su OCT e i 4 kHz finivano negli "Alti": una punta a 4 kHz
+   annullava in media un calo su 8/16 kHz e il consiglio spariva del tutto.)
+   Nota: sui mixer a 3 bande il controllo medi sta intorno a 2,5 kHz e gli alti
+   sono uno shelf sopra i 10 kHz, quindi 2-4 kHz appartiene ai MEDI. */
 const BROAD=[
- {name:"Bassi",idx:[0,1,2,3],
+ {name:"Bassi",zones:[0,1],
   hi:"Suono impastato o rimbombante: gira la manopola dei bassi verso il taglio.",
-  lo:"Voce sottile, senza corpo: alza leggermente i bassi."},
- {name:"Medi",idx:[4,5,6],
+  lo:"Voce sottile, senza corpo: alza leggermente i bassi.",
+  cf:"Qui servono due correzioni opposte: una parte dei bassi è in eccesso e un'altra è carente. Con una sola manopola non si risolve: lasciala com'è e, se puoi, intervieni sulla posizione delle casse o del sub."},
+ {name:"Medi",zones:[2,3],
   hi:"Suono nasale o affaticante, consonanti dure: taglia leggermente i medi.",
-  lo:"Voce che non emerge, poco presente: alza leggermente i medi."},
- {name:"Alti",idx:[7,8,9],
+  lo:"Voce che non emerge, poco presente: alza leggermente i medi.",
+  cf:"Qui servono due correzioni opposte: una parte dei medi è in eccesso e un'altra è carente. Con una sola manopola non si risolve: lasciala com'è, serve un equalizzatore più preciso."},
+ {name:"Alti",zones:[4],
   hi:"Sibilanti marcate, rischio di fischio: taglia gli alti.",
-  lo:"Voce opaca, poco chiara: alza leggermente gli alti."}
+  lo:"Voce opaca, poco chiara: alza leggermente gli alti.",
+  cf:"Qui servono due correzioni opposte sugli alti: con una sola manopola non si risolve."}
 ];
 
 /* --- modalità "parlato reale": soglia sotto la quale un frame non conta come voce presente --- */
@@ -521,12 +530,14 @@ function report(sp){
     return n?s/n:null;
   });
 
-  const short=[],blocks=[];
-  ZONES.forEach(z=>{
+  const short=[],blocks=[],zoneState=[];
+  ZONES.forEach((z,zi)=>{
     const vals=z.i.map(k=>octDev[k]).filter(v=>v!=null);
-    if(!vals.length)return;
+    if(!vals.length){zoneState[zi]=null;return;}
     const d=vals.reduce((a,b)=>a+b,0)/vals.length;
-    if(Math.abs(d)<z.min)return;
+    const on=Math.abs(d)>=z.min;
+    zoneState[zi]={d,on};
+    if(!on)return;
     const lvl=Math.abs(d)<z.min+1.5?0:Math.abs(d)<6?1:2;
     const up=d>0;
     short.push(up?z.hi[lvl]:z.lo[lvl]);
@@ -568,11 +579,17 @@ function report(sp){
         why:(d>0?w.hi:w.lo)});
     });
   }else{
+    /* I consigli sul mixer derivano dalle stesse zone del testo in linguaggio
+       comune: se una zona è stata segnalata, la sua manopola compare sempre. */
     BROAD.forEach(b=>{
-      const vals=b.idx.map(i=>octDev[i]).filter(v=>v!=null);
-      if(!vals.length)return;
-      const d=vals.reduce((a,c2)=>a+c2,0)/vals.length;
-      if(Math.abs(d)<2)return;
+      const trig=b.zones.map(z=>zoneState[z]).filter(z=>z&&z.on);
+      if(!trig.length)return;
+      const up=trig.filter(t=>t.d>0),down=trig.filter(t=>t.d<0);
+      if(up.length&&down.length){
+        items.push({cls:"narrow",amt:"—",unit:"non risolvibile",title:b.name,why:b.cf});
+        return;
+      }
+      const d=trig.reduce((a,t)=>a+t.d,0)/trig.length;
       const amt=Math.max(-9,Math.min(9,-d));
       items.push({cls:amt<0?"cut":"boost",amt:(amt>0?"+":"−")+Math.abs(amt).toFixed(1),unit:"dB",
         title:b.name,
