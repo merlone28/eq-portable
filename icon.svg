@@ -1,0 +1,36 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#25292c"/>
+      <stop offset="12%" stop-color="#1b1e21"/>
+      <stop offset="88%" stop-color="#191c1e"/>
+      <stop offset="100%" stop-color="#22262a"/>
+    </linearGradient>
+    <linearGradient id="barAmber" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#c98a1f"/>
+      <stop offset="100%" stop-color="#ffb02e"/>
+    </linearGradient>
+    <linearGradient id="barCyan" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#1f8f94"/>
+      <stop offset="100%" stop-color="#3fd0d6"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="0" y="0" width="512" height="512" fill="url(#bg)"/>
+
+  <circle cx="46" cy="46" r="10" fill="#15181a"/>
+  <circle cx="466" cy="46" r="10" fill="#15181a"/>
+
+  <line x1="108" y1="228" x2="404" y2="228" stroke="#e7e9ea" stroke-opacity="0.55" stroke-width="5" stroke-dasharray="14 10"/>
+
+  <g>
+    <rect x="112" y="300" width="34" height="80"  rx="4" fill="url(#barCyan)"/>
+    <rect x="160" y="250" width="34" height="130" rx="4" fill="url(#barAmber)"/>
+    <rect x="208" y="188" width="34" height="192" rx="4" fill="url(#barCyan)"/>
+    <rect x="256" y="132" width="34" height="248" rx="4" fill="url(#barAmber)"/>
+    <rect x="304" y="196" width="34" height="184" rx="4" fill="url(#barCyan)"/>
+    <rect x="352" y="258" width="34" height="122" rx="4" fill="url(#barAmber)"/>
+  </g>
+
+  <circle cx="256" cy="446" r="9" fill="#ffb02e"/>
+</svg>

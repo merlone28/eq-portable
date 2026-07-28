@@ -1,0 +1,19 @@
+{
+  "name": "RTA / Assistente di equalizzazione",
+  "short_name": "RTA EQ",
+  "description": "Analizzatore RTA e assistente di equalizzazione per impianti audio dal vivo, con rilevatore di fischio in tempo reale.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#101214",
+  "theme_color": "#16181a",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

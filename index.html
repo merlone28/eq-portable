@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#16181a">
 <title>RTA / Assistente di equalizzazione</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RTA EQ">
 <style>
 :root{
   --panel:#1b1e21;--etch:#3a4045;--silk:#9aa3a8;--silk-dim:#666e73;
@@ -653,6 +660,13 @@ $("target").onchange=()=>{
 };
 window.addEventListener("resize",()=>draw(frozen||(smooth?normalize(smooth):null)));
 draw(null);
+
+/* --- installabilità: registra il service worker per uso offline e "Installa app" --- */
+if("serviceWorker" in navigator){
+  window.addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>
