@@ -59,6 +59,23 @@ Soglie tarate a mano (da verificare sul campo, sono il punto più probabile da a
 
 Limiti noti: è un'euristica acustica, non una vera misura di margine di guadagno (non conosce il gain reale del mixer); su un fonico esperto è un aiuto, non un sostituto dell'orecchio. Va provato con un vero ring test in sala prima di fidarsene durante un'adunanza vera.
 
+## Due modalità: Sala del Regno e Avanzata
+
+L'app si apre in **Sala del Regno** (modalità guidata) ed è la modalità pensata per l'uso reale: chi la usa non deve conoscere nulla di audio. La scelta è salvata in `localStorage` (`rtaAppMode`), quindi chi installa l'app la ritrova come l'ha lasciata.
+
+**Sala del Regno (easy)**
+- Preset bloccati e applicati da `setAppMode("easy")`: curva **speech**, **gate mode** attivo, **EQ a 3 bande**, durata **20 s**. Il rumore rosa viene fermato se attivo.
+- Restano visibili solo: pulsante microfono, un unico pulsante grande **Analizza la sala**, i due pulsanti di media/azzeramento, il grafico, il rilevatore di fischio e il referto.
+- Card guidata "Cosa fare, passo per passo" con 5 passi in linguaggio comune.
+- Il dettaglio delle correzioni si apre già espanso (`cardsDetails.open=true`) con il titolo "Cosa toccare sul mixer".
+- Testi di note e referto riscritti senza gergo (niente dBFS, Q, cancellazioni di fase).
+
+**Avanzata (pro)**
+- Sblocca tutti i controlli originali: durata 10/20/30 s, rumore rosa, modalità di misura, curva obiettivo, dettaglio parametrico/3 bande.
+- Passando da easy a pro le impostazioni correnti **non vengono resettate**: restano quelle dei preset finché non le cambi. Questo è voluto (nulla cambia sotto i piedi, si sbloccano solo i comandi).
+
+**Implementazione.** Una classe sul `<body>` (`easy` / `pro`) più due classi di visibilità: `.proOnly` è nascosto in easy, `.easyOnly` è nascosto in pro. Le etichette condivise passano da `runLabel()` e `posLabel()`, così i pulsanti e i testi del referto restano coerenti con la modalità attiva. `setAppMode()` è bloccata durante un'analisi in corso.
+
 ## EQ semplificata a 3 bande — come funziona e perché
 
 Toggle "Dettaglio correzioni" nella sezione controlli: **Parametrico** (comportamento originale, fino a 31 bande fini più i picchi stretti Q&asymp;10) oppure **3 bande**, pensata per i mixer da Sala del Regno che hanno solo bassi/medi/alti a shelf, senza parametrico.
@@ -108,6 +125,8 @@ Percorso previsto: GitHub Pages → aggiunta alla home del telefono. Nessuna bui
 
 **Fatto (28/07/2026):** EQ semplificata a 3 bande e misura "a gate" sul parlato reale — vedi le due sezioni dedicate sopra.
 
+**Fatto (28/07/2026):** separazione in **due modalità**, Sala del Regno (guidata) e Avanzata — vedi sezione dedicata sopra. Nel farlo è emerso e stato corretto un bug del service worker che impediva agli aggiornamenti di arrivare agli utenti.
+
 Priorità rimaste, pensate per lo stesso caso d'uso (parlato dal vivo, mixer semplice, sala di culto):
 
 1. **Esportazione del referto** (testo o PNG del grafico) da mandare a chi opera il mixer, se non è la stessa persona che tiene il telefono.
@@ -119,7 +138,16 @@ Priorità rimaste, pensate per lo stesso caso d'uso (parlato dal vivo, mixer sem
 ## Installabilità (PWA) — come funziona
 
 - `manifest.json`: nome, icone, `display:"standalone"`, `theme_color`/`background_color` coerenti con la UI (`#16181a`/`#101214`).
-- `sw.js`: service worker cache-first con fallback di rete, cache versione `rta-eq-v1`, precarica la shell (`index.html`, manifest, icone). Registrato in fondo allo `<script>` di `rta-equalizzazione.html` con `navigator.serviceWorker.register("sw.js")`, avvolto in un controllo `"serviceWorker" in navigator` e un `.catch(()=>{})` silenzioso: se il service worker non parte (es. `file://` locale, dove i service worker non sono supportati) l'app funziona comunque, solo senza cache offline garantita.
+- `sw.js`: service worker, cache versione `rta-eq-v3`, precarica la shell (`index.html`, manifest, icone). Registrato in fondo allo `<script>` di `rta-equalizzazione.html` con `navigator.serviceWorker.register("sw.js")`, avvolto in un controllo `"serviceWorker" in navigator` e un `.catch(()=>{})` silenzioso: se il service worker non parte (es. `file://` locale, dove i service worker non sono supportati) l'app funziona comunque, solo senza cache offline garantita.
+
+### ⚠️ Strategia di cache — attenzione, qui è già stato commesso un errore
+
+La prima versione era **cache-first per tutto**: risultato, una volta installata l'app, **gli aggiornamenti non arrivavano più**. Si pubblicava una nuova versione su Pages e il telefono continuava a mostrare quella vecchia, all'infinito. Sistemato in due passaggi (entrambi necessari):
+
+1. **Network-first per l'HTML**: il documento si prende sempre dalla rete, la cache serve solo come fallback offline. Il resto (icone, manifest) resta cache-first.
+2. **Bypass della cache HTTP del browser**: non bastava il punto 1, perché `fetch()` può restituire l'HTML dalla cache HTTP di GitHub Pages (`max-age`) e l'utente vedeva comunque la versione vecchia. Servono `fetch(req, {cache:"no-store"})` nel fetch handler e `new Request(u, {cache:"reload"})` nel precache di `install`.
+
+**Regola operativa: a ogni rilascio, alza il numero di versione in `const CACHE`** (`rta-eq-v3` → `v4` …). È quello che fa scattare la pulizia delle cache vecchie in `activate`. Dopo una pubblicazione, per verificare davvero che l'aggiornamento passi, ricarica **due volte** (la prima attiva il nuovo service worker, la seconda mostra il contenuto nuovo).
 - Icone: `icon.svg` è il sorgente (barre di uno spettro ambra/ciano su sfondo scuro, con la linea tratteggiata dell'obiettivo, in stile con la UI); esportate in PNG con cairosvg a 512, 192, 180 (apple-touch-icon) e 32 px (favicon). Sono full-bleed e il contenuto rientra nella "safe zone" delle icone maskable, quindi lo stesso file serve sia per `purpose:"any"` che `"maskable"`.
 - **Su Android/Chrome desktop:** con manifest + service worker attivi, il browser offre "Installa app"/"Aggiungi a schermata Home" con l'icona vera.
 - **Su iOS/Safari:** "Aggiungi a Home" ha sempre funzionato per qualsiasi sito, ma senza i meta tag `apple-touch-icon` e `apple-mobile-web-app-capable` usava uno screenshot della pagina invece dell'icona ed apriva dentro Safari. Ora usa l'icona vera e apre a schermo intero come app.
