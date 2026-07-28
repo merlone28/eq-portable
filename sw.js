@@ -1,5 +1,6 @@
 "use strict";
-const CACHE = "rta-eq-v1";
+/* Bump la versione a ogni rilascio: forza la pulizia delle cache vecchie. */
+const CACHE = "rta-eq-v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -26,15 +27,43 @@ self.addEventListener("activate", e => {
   );
 });
 
-// cache-first, aggiorna in background, fallback alla rete se manca in cache
+/*
+  Strategia differenziata:
+  - documento HTML (navigazione): PRIMA la rete, cache solo come fallback offline.
+    Senza questo, una versione vecchia dell'app resta in cache per sempre e gli
+    aggiornamenti non arrivano mai all'utente.
+  - resto (icone, manifest): cache-first con aggiornamento in background.
+*/
+function isHtml(req){
+  return req.mode === "navigate" ||
+         (req.headers.get("accept") || "").includes("text/html");
+}
+
 self.addEventListener("fetch", e => {
-  if (e.request.method !== "GET") return;
+  const req = e.request;
+  if (req.method !== "GET") return;
+
+  if (isHtml(req)) {
+    e.respondWith(
+      fetch(req)
+        .then(res => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then(c => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then(c => c || caches.match("./index.html")))
+    );
+    return;
+  }
+
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      const fetchPromise = fetch(e.request).then(res => {
+    caches.match(req).then(cached => {
+      const fetchPromise = fetch(req).then(res => {
         if (res && res.ok) {
           const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
+          caches.open(CACHE).then(c => c.put(req, copy));
         }
         return res;
       }).catch(() => cached);
